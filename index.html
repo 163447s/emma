@@ -330,6 +330,9 @@
                     <button class="collapsed-extra-btn" id="collapsed-call-btn" title="视频通话" onclick="(function(){document.getElementById('collapsed-extras-panel').style.display='none';document.getElementById('collapse-expand-btn').classList.remove('open');if(window.callFeature&&typeof window.callFeature.startCall==='function')window.callFeature.startCall(false);})();">
                         <i class="fas fa-video"></i>
                     </button>
+                    <button class="collapsed-extra-btn" title="问答" style="gap:6px;font-size:13px;font-weight:600;" onclick="(function(){document.getElementById('collapsed-extras-panel').style.display='none';document.getElementById('collapse-expand-btn').classList.remove('open');window.openQA && window.openQA();})();">
+                        <i class="fas fa-question-circle"></i><span style="display:inline;">问答</span>
+                    </button>
                     <button class="collapsed-extra-btn" title="退出收纳" onclick="window.exitCollapseMode && window.exitCollapseMode()" style="color:#ff5050; background:rgba(255,80,80,0.1);">
                         <i class="fas fa-times"></i>
                     </button>
@@ -1397,6 +1400,9 @@
                     <div class="settings-item" id="envelope-function">
                         <i class="fas fa-envelope"></i><span>信封投递</span>
                     </div>
+                    <div class="settings-item" id="qa-function">
+                        <i class="fas fa-question-circle"></i><span>问答</span>
+                    </div>
                 </div>
             </div>
 
@@ -2229,6 +2235,7 @@
     <script src="js/features/theme-editor.js"></script>
     <script src="js/features/group-chat.js"></script>
     <script src="js/features/call.js"></script>
+    <script src="js/features/qa.js"></script>
 
     <!-- == 合并模块 == -->
     <script src="js/games.js"></script> 

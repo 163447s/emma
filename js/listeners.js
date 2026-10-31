@@ -14,6 +14,7 @@ function setupEventListeners() {
         initThemeSchemes();
         
         initComboMenu(); 
+        initQAModule(); 
         
     } catch (e) {
         console.error("事件绑定过程中发生错误:", e);
