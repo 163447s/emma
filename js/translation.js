@@ -1,22 +1,19 @@
 /* ============================================================
- * 中日双语切换模块（有道翻译 API 免费版）
+ * 翻译模块（有道翻译 API 免费版）
  * 功能：
- *   1. 字卡库面板双语切换（主文字翻译，副文字保持原文）
- *   2. 聊天消息气泡双语切换（仅翻译对方收到的消息，自己发的原文）
- *   3. 输入框下方「发中文 / 发日本語」按钮
- *   4. 模拟回复的「回复语言」选项
- * 依赖：无（在任何其它脚本之前/之后加载均可；API Key 在设置弹窗中配置）
+ *   1. 发送消息时自动把中文翻译为日语后发出（core.js 的 sendMessage 调用）
+ *      - 聊天界面显示日语，messages 数组同时存中文原文（originalText）
+ *   2. 每条消息气泡右上角「翻译」小按钮，点击后那条消息独立切换中日显示
+ *   3. API Key 配置弹窗（设置 → 高级功能 → 翻译设置）
+ * 依赖：无；需在 core.js 之前加载（core.js 调用 window.Translation）
  * ============================================================ */
 (function () {
     'use strict';
 
     // ── 常量 ──────────────────────────────────────────────
     const API_URL = 'https://openapi.youdao.com/api';
-    const LANG_KEY = 'languagePreference';                 // 显示语言偏好（zh / ja）
-    const CACHE_KEY = 'translationCache';                  // 翻译缓存
-    const REPLY_CACHE_KEY = 'replyTranslationCache';       // 回复翻译缓存（独立 key）
+    const CACHE_KEY = 'translationCache';                  // 翻译缓存（localStorage）
     const KEYS_KEY = 'youdaoApiKeys';                      // 有道 API 应用ID + 密钥
-    const REPLY_LANG_KEY = 'replyLanguagePreference';      // 回复语言偏好（zh / ja）
     const MAX_CACHE_ENTRIES = 600;
     const MAX_CONCURRENT = 4;
 
@@ -24,7 +21,7 @@
     let _inFlight = 0;
     const _pendingQueue = [];
 
-    // ── 工具：md5（标准实现）────────────────────────────
+    // ── 工具：md5（标准实现；已修复 binl2utf8bytes 中 mask 未定义）──
     function md5(s) {
         function safeAdd(x, y) {
             const lsw = (x & 0xffff) + (y & 0xffff);
@@ -182,32 +179,16 @@
     // ── API Key 配置 ─────────────────────────────────────
     function getKeys() {
         const o = lsGet(KEYS_KEY, null);
-        return (o && typeof o === 'object') ? { appId: String(o.appId || '').trim(), appSecret: String(o.appSecret || '').trim() } : { appId: '', appSecret: '' };
-    }
-    function hasKeys() {
-        const k = getKeys();
-        return !!(k.appId && k.appSecret);
+        return (o && typeof o === 'object')
+            ? { appId: String(o.appId || '').trim(), appSecret: String(o.appSecret || '').trim() }
+            : { appId: '', appSecret: '' };
     }
     function saveKeys(appId, appSecret) {
         lsSet(KEYS_KEY, { appId: String(appId || '').trim(), appSecret: String(appSecret || '').trim() });
     }
-
-    // ── 语言偏好 ─────────────────────────────────────────
-    function getLanguage() {
-        try { return localStorage.getItem(LANG_KEY) === 'ja' ? 'ja' : 'zh'; } catch (e) { return 'zh'; }
-    }
-    function setLanguage(lang) {
-        const v = lang === 'ja' ? 'ja' : 'zh';
-        try { localStorage.setItem(LANG_KEY, v); } catch (e) {}
-        return v;
-    }
-    function getReplyLanguage() {
-        try { return localStorage.getItem(REPLY_LANG_KEY) === 'ja' ? 'ja' : 'zh'; } catch (e) { return 'zh'; }
-    }
-    function setReplyLanguage(lang) {
-        const v = lang === 'ja' ? 'ja' : 'zh';
-        try { localStorage.setItem(REPLY_LANG_KEY, v); } catch (e) {}
-        return v;
+    function hasKeys() {
+        const { appId, appSecret } = getKeys();
+        return !!(appId && appSecret);
     }
 
     // ── 翻译缓存 ─────────────────────────────────────────
@@ -248,7 +229,7 @@
     function _truncateQ(q) {
         return q.length <= 20 ? q : q.substring(0, 10) + q.length + q.substring(q.length - 10);
     }
-    // sha256（官方最新 v3 方案，需要 WebCrypto；https/file 安全上下文可用）
+    // sha256（官方现行 v3 方案，需要 WebCrypto；https/file 安全上下文可用）
     async function _sha256Hex(str) {
         try {
             if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
@@ -292,6 +273,7 @@
         if (!appId || !appSecret) return null; // 未配置密钥 → 由调用方回退原文
         // JSONP 走 GET，URL 长度有限：超长文本直接回退原文
         if (String(q).length > 300) return null;
+        const to = toLang === 'zh' ? 'zh-CHS' : 'ja';
         const salt = String(Date.now()) + String(Math.floor(Math.random() * 100000));
         const curtime = String(Math.round(Date.now() / 1000));
         const input = _truncateQ(q);
@@ -300,12 +282,12 @@
         const attempts = [];
         const sha = await _sha256Hex(appId + input + salt + curtime + appSecret);
         if (sha) {
-            attempts.push({ q, from: 'auto', to: toLang, appKey: appId, salt, sign: sha, signType: 'v3', curtime });
+            attempts.push({ q, from: 'auto', to, appKey: appId, salt, sign: sha, signType: 'v3', curtime });
         }
         // 方案2（兼容旧版）：signType=v3 + md5(appKey+input+salt+secret)，无 curtime
         // 签名计算失败（如 md5 异常）时跳过该方案，不阻塞正确方案
         try {
-            attempts.push({ q, from: 'auto', to: toLang, appKey: appId, salt, sign: md5(appId + input + salt + appSecret), signType: 'v3' });
+            attempts.push({ q, from: 'auto', to, appKey: appId, salt, sign: md5(appId + input + salt + appSecret), signType: 'v3' });
         } catch (e) {}
 
         for (const attempt of attempts) {
@@ -332,16 +314,14 @@
      * 翻译文本（异步，永不 reject）
      * @param {string} text 原文
      * @param {string} lang 目标语言（'ja' / 'zh'）
-     * @param {object} [opts] { cacheKey } 独立缓存 key（用于回复翻译）
      * @returns {Promise<string>} 译文；失败/未配置密钥时返回原文
      */
-    async function translateText(text, lang, opts) {
+    async function translateText(text, lang) {
         const raw = String(text == null ? '' : text);
         if (!raw.trim()) return raw;
         const toLang = lang === 'ja' ? 'ja' : 'zh';
-        const cacheKey = (opts && opts.cacheKey) || CACHE_KEY;
 
-        const cached = getCachedTranslation(raw, toLang, cacheKey);
+        const cached = getCachedTranslation(raw, toLang);
         if (cached) return cached;
 
         if (!hasKeys()) return raw; // 无密钥：回退原文，不影响使用
@@ -349,174 +329,13 @@
         try {
             const t = await _withConcurrency(() => _callYoudao(raw, toLang));
             if (t && t !== raw) {
-                setCachedTranslation(raw, toLang, t, cacheKey);
+                setCachedTranslation(raw, toLang, t);
                 return t;
             }
             return raw;
         } catch (e) {
             return raw;
         }
-    }
-
-    /**
-     * 翻译字卡：只翻译 | 分隔符之前的主文字，副文字保持原文
-     * @param {string} cardText 字卡原文（可能含 |）
-     */
-    async function translateCardText(cardText, lang) {
-        const raw = String(cardText == null ? '' : cardText);
-        const sepIdx = raw.indexOf('|');
-        const mainText = sepIdx >= 0 ? raw.substring(0, sepIdx) : raw;
-        const subText = sepIdx >= 0 ? raw.substring(sepIdx) : ''; // 含 | 与副文字，保持原文
-        if (!mainText.trim()) return raw;
-        const t = await translateText(mainText, lang);
-        return t + subText;
-    }
-
-    // ── 聊天消息双语（仅翻译对方消息）──────────────────
-    function _escapeHtml(s) {
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-    function applyChatLanguage() {
-        const lang = getLanguage();
-        document.querySelectorAll('#chat-container .msg-txt-translatable').forEach(el => {
-            const orig = el.dataset.original;
-            if (orig === undefined || orig === null) return;
-            if (lang !== 'ja') {
-                if (el.dataset.translated) {
-                    el.innerHTML = _escapeHtml(orig).replace(/\n/g, '<br>');
-                    delete el.dataset.translated;
-                }
-                return;
-            }
-            if (el.dataset.translated) return; // 已翻译
-            el.classList.add('trans-loading');
-            translateCardText(orig, 'ja').then(t => {
-                if (!document.body.contains(el)) return;
-                el.classList.remove('trans-loading');
-                if (lang !== getLanguage()) return; // 期间被切回中文，放弃
-                if (t && t !== orig) {
-                    el.innerHTML = _escapeHtml(t).replace(/\n/g, '<br>');
-                    el.dataset.translated = '1';
-                }
-            });
-        });
-    }
-
-    // ── 字卡库双语 ───────────────────────────────────────
-    function _localizeEl(el, originalText, lang, opts) {
-        if (!el || originalText === undefined || originalText === null) return;
-        if (lang !== 'ja') {
-            if (el.dataset.translated) {
-                el.textContent = originalText;
-                delete el.dataset.translated;
-            }
-            return;
-        }
-        if (el.dataset.translated) return;
-        el.classList.add('trans-loading');
-        translateText(originalText, 'ja', opts).then(t => {
-            if (!document.body.contains(el)) return;
-            el.classList.remove('trans-loading');
-            if (lang !== getLanguage()) return;
-            if (t && t !== originalText) {
-                el.textContent = t;
-                el.dataset.translated = '1';
-            }
-        });
-    }
-
-    function localizeReplyLibrary() {
-        const lang = getLanguage();
-        // 字卡主文字（只翻译 | 前，副文字保持原文）
-        document.querySelectorAll('#custom-replies-modal [data-rl-main]').forEach(el => {
-            const orig = el.dataset.original;
-            if (orig === undefined || orig === null) return;
-            if (lang !== 'ja') {
-                if (el.dataset.translated) {
-                    const sepIdx = String(orig).indexOf('|');
-                    el.textContent = sepIdx >= 0 ? String(orig).substring(0, sepIdx) : orig;
-                    delete el.dataset.translated;
-                }
-                return;
-            }
-            if (el.dataset.translated) return;
-            el.classList.add('trans-loading');
-            translateCardText(String(orig), 'ja').then(t => {
-                if (!document.body.contains(el)) return;
-                el.classList.remove('trans-loading');
-                if (lang !== getLanguage()) return;
-                if (t && t !== String(orig)) {
-                    el.textContent = t;
-                    el.dataset.translated = '1';
-                }
-            });
-        });
-        // 分组名（分组头、筛选胶囊、卡片角标）
-        document.querySelectorAll('#custom-replies-modal [data-rl-group-name], #custom-replies-modal [data-rl-gfp], #custom-replies-modal [data-rl-group-badge]').forEach(el => {
-            const orig = el.dataset.original;
-            if (orig === undefined || orig === null || !String(orig).trim()) return;
-            _localizeEl(el, orig, lang);
-        });
-    }
-
-    // ── 语言切换按钮 ─────────────────────────────────────
-    function refreshLangButtons() {
-        const lang = getLanguage();
-        const isJa = lang === 'ja';
-        ['lang-toggle-btn', 'rl-lang-toggle'].forEach(id => {
-            const btn = document.getElementById(id);
-            if (!btn) return;
-            btn.textContent = isJa ? '日本語' : '中文';
-            btn.title = isJa ? '当前：日语显示。点击切换到中文' : '当前：中文显示。点击切换到日语';
-            btn.classList.toggle('active', isJa);
-        });
-        const sel = document.getElementById('reply-lang-select');
-        if (sel) sel.value = getReplyLanguage();
-    }
-
-    function toggleLanguage() {
-        const next = getLanguage() === 'ja' ? 'zh' : 'ja';
-        setLanguage(next);
-        refreshLangButtons();
-        if (next === 'ja' && !hasKeys() && typeof showNotification === 'function') {
-            showNotification('日语模式需要翻译密钥，请在「高级功能 → 翻译设置」中配置 API Key', 'warning', 3500);
-        }
-        // 重新渲染聊天与字卡库
-        if (typeof renderMessages === 'function') renderMessages(true);
-        if (typeof window._localizeReplyLibrary === 'function') window._localizeReplyLibrary();
-    }
-
-    // ── 发送按钮：发中文 / 发日本語 ────────────────────
-    function _getInputText() {
-        const input = document.getElementById('message-input');
-        return input ? input.value.trim() : '';
-    }
-    function sendAsChinese() {
-        if (!_getInputText()) return;
-        if (typeof sendMessage === 'function') sendMessage();
-    }
-    function sendAsJapanese() {
-        const text = _getInputText();
-        if (!text) return;
-        const btn = document.getElementById('translate-send-ja');
-        if (btn) btn.disabled = true;
-        const done = () => { if (btn) btn.disabled = false; };
-        translateText(text, 'ja').then(t => {
-            done();
-            const same = String(t) === String(text);
-            if (typeof sendMessage === 'function') sendMessage(t, 'normal');
-            if (typeof showNotification === 'function') {
-                if (same) {
-                    showNotification(hasKeys() ? '翻译失败，已发送原文' : '未配置翻译密钥，已发送原文', 'warning', 2200);
-                } else {
-                    showNotification('已翻译为日语发送', 'success', 1600);
-                }
-            }
-        }).catch(() => {
-            done();
-            if (typeof sendMessage === 'function') sendMessage(text, 'normal');
-            if (typeof showNotification === 'function') showNotification('翻译失败，已发送原文', 'warning', 2200);
-        });
     }
 
     // ── API Key 配置弹窗 ────────────────────────────────
@@ -568,7 +387,6 @@
             setTimeout(() => {
                 if (typeof hideModal === 'function') hideModal(modal);
                 if (typeof showNotification === 'function') showNotification('翻译设置已保存', 'success', 1800);
-                refreshLangButtons();
             }, 400);
         };
         return modal;
@@ -590,92 +408,52 @@
         else modal.style.display = 'flex';
     }
 
-    // ── 样式 ─────────────────────────────────────────────
+    // ── 样式：消息气泡翻译小按钮 ────────────────────────
     function injectStyles() {
         if (document.getElementById('translation-module-style')) return;
         const style = document.createElement('style');
         style.id = 'translation-module-style';
         style.textContent = `
-            .trans-loading { opacity: 0.55 !important; transition: opacity 0.2s ease; }
-            #lang-toggle-btn, #rl-lang-toggle { width: auto; padding: 0 12px; font-size: 12px; font-weight: 600; letter-spacing: 0.5px; }
-            #lang-toggle-btn.active, #rl-lang-toggle.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
-            #translate-send-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 12px 0; }
-            #translate-send-bar .ts-btn {
-                border: 1.5px solid var(--border-color); background: var(--primary-bg);
-                color: var(--text-secondary); font-size: 11.5px; font-weight: 600;
-                padding: 4px 12px; border-radius: 20px; cursor: pointer;
-                font-family: var(--font-family); transition: all 0.18s; line-height: 1.6;
+            .msg-translate-btn {
+                position: absolute; top: 4px; right: 6px; z-index: 3;
+                font-size: 10px; line-height: 1; padding: 3px 7px;
+                border: none; border-radius: 10px; cursor: pointer;
+                background: rgba(128, 128, 128, 0.28); color: inherit;
+                opacity: 0; transition: opacity 0.18s;
+                font-family: var(--font-family);
             }
-            #translate-send-bar .ts-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
-            #translate-send-bar .ts-btn.ts-ja { border-color: rgba(var(--accent-color-rgb),0.35); color: var(--accent-color); background: rgba(var(--accent-color-rgb),0.06); }
-            #translate-send-bar .ts-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+            .message:hover .msg-translate-btn { opacity: 1; }
+            .msg-translate-btn:hover { background: rgba(128, 128, 128, 0.45); }
+            .msg-translate-btn:disabled { cursor: wait; opacity: 0.7; }
         `;
         document.head.appendChild(style);
     }
 
     // ── 初始化 ───────────────────────────────────────────
     function bindEvents() {
-        const langBtn = document.getElementById('lang-toggle-btn');
-        if (langBtn) langBtn.addEventListener('click', toggleLanguage);
-        const rlToggle = document.getElementById('rl-lang-toggle');
-        if (rlToggle) rlToggle.addEventListener('click', toggleLanguage);
-
-        const sendZh = document.getElementById('translate-send-zh');
-        if (sendZh) sendZh.addEventListener('click', sendAsChinese);
-        const sendJa = document.getElementById('translate-send-ja');
-        if (sendJa) sendJa.addEventListener('click', sendAsJapanese);
-
-        const replySel = document.getElementById('reply-lang-select');
-        if (replySel) {
-            replySel.value = getReplyLanguage();
-            replySel.addEventListener('change', () => {
-                setReplyLanguage(replySel.value);
-                if (typeof showNotification === 'function') {
-                    showNotification(replySel.value === 'ja' ? '对方回复将翻译为日语显示' : '对方回复将按原文显示', 'success', 1600);
-                }
-            });
-        }
-
         const configEntry = document.getElementById('translate-config-entry');
         if (configEntry) configEntry.addEventListener('click', openConfig);
     }
 
     function init() {
         injectStyles();
-        refreshLangButtons();
         bindEvents();
     }
 
-    // 页面加载完成后初始化（此时核心脚本均已就绪）
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
 
-    // ── 对外导出 ─────────────────────────────────────────
+    // ── 对外导出（core.js 调用）────────────────────────
     window.Translation = {
         translateText: translateText,
-        translateCardText: translateCardText,
         getCachedTranslation: getCachedTranslation,
         setCachedTranslation: setCachedTranslation,
-        getLanguage: getLanguage,
-        setLanguage: setLanguage,
-        getReplyLanguage: getReplyLanguage,
-        setReplyLanguage: setReplyLanguage,
         getKeys: getKeys,
         hasKeys: hasKeys,
         saveKeys: saveKeys,
-        openConfig: openConfig,
-        toggleLanguage: toggleLanguage,
-        refreshLangButtons: refreshLangButtons
+        openConfig: openConfig
     };
-    // 供 core.js / reply-library.js 调用的钩子
-    window._applyChatLanguage = applyChatLanguage;
-    window._localizeReplyLibrary = localizeReplyLibrary;
-    window._translateForReply = function (cardText) {
-        return translateCardText(cardText, 'ja').then(t => t === null || t === undefined ? String(cardText) : t);
-    };
-    window.getReplyLanguage = getReplyLanguage;
-    window.setReplyLanguage = setReplyLanguage;
 })();

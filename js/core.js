@@ -1059,8 +1059,7 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
     const isImageOnly = !msg.text && !!msg.image;
     let content = '';
     if (msg.text) {
-        const _txtCls = (msg.sender !== 'user') ? ' msg-txt-translatable' : '';
-        content += `<div class="msg-txt${_txtCls}">${msg.text.replace(/\n/g, '<br>')}</div>`;
+        content += `<div class="msg-txt"></div>`;
     }
     if (msg.image) content += `<img src="${msg.image}" class="message-image${isImageOnly ? ' message-image-only' : ''}" alt="图片" style="max-width:${isImageOnly ? '100px' : '100px'}; border-radius: 12px;${!isImageOnly ? ' margin-top: 6px;' : ''} cursor: pointer;" onclick="viewImage('${msg.image}')">`;
     messageHTML += content;
@@ -1072,8 +1071,26 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
         messageDiv.className = `message message-${msg.sender === 'user' ? 'sent' : 'received'} ${settings.bubbleStyle}`;
     }
     messageDiv.innerHTML = messageHTML;
-    if (msg.sender !== 'user' && msg.text) {
-        messageDiv.querySelectorAll('.msg-txt-translatable').forEach(el => { el.dataset.original = msg.text; });
+    if (msg.text) {
+        const txtEl = messageDiv.querySelector('.msg-txt');
+        if (txtEl) {
+            txtEl.innerHTML = String(msg.text).replace(/\n/g, '<br>');
+            const zhText = (msg.sender === 'user' && msg.originalText) ? msg.originalText : msg.text;
+            txtEl.dataset.zh = zhText;
+            if (String(msg.text) !== String(zhText)) {
+                txtEl.dataset.ja = msg.text;
+                txtEl.dataset.showing = 'ja';
+            } else {
+                txtEl.dataset.showing = 'zh';
+            }
+            const tBtn = document.createElement('button');
+            tBtn.type = 'button';
+            tBtn.className = 'msg-translate-btn';
+            tBtn.textContent = '翻译';
+            tBtn.title = '切换中日显示';
+            tBtn.onclick = function () { window._toggleMsgTranslation(this); };
+            messageDiv.appendChild(tBtn);
+        }
     }
 
     let actionsHTML = '';
@@ -1142,6 +1159,51 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
     return fragment;
 }
 
+window._toggleMsgTranslation = function (btn) {
+    const messageDiv = btn && btn.closest ? btn.closest('.message') : null;
+    if (!messageDiv) return;
+    const el = messageDiv.querySelector('.msg-txt');
+    if (!el) return;
+    const zh = el.dataset.zh;
+    if (zh === undefined || zh === null) return;
+    if (el.dataset.showing === 'ja') {
+        // 已显示日语 → 切回中文原文
+        el.innerHTML = String(zh).replace(/\n/g, '<br>');
+        el.dataset.showing = 'zh';
+        btn.textContent = '翻译';
+        btn.disabled = false;
+        return;
+    }
+    if (el.dataset.ja) {
+        // 已有日语（用户发日语消息）→ 直接切日语
+        el.innerHTML = el.dataset.ja.replace(/\n/g, '<br>');
+        el.dataset.showing = 'ja';
+        btn.textContent = '翻译';
+        return;
+    }
+    // 需要翻译：显示中文 → 调 API 翻译为日语
+    if (!window.Translation || typeof window.Translation.translateText !== 'function') return;
+    btn.textContent = '翻译中...';
+    btn.disabled = true;
+    window.Translation.translateText(zh, 'ja').then(function (t) {
+        btn.textContent = '翻译';
+        btn.disabled = false;
+        if (!document.body.contains(el)) return;
+        const ja = (t && String(t).trim() && String(t).trim() !== zh) ? String(t).trim() : null;
+        if (ja) {
+            el.dataset.ja = ja;
+            el.innerHTML = ja.replace(/\n/g, '<br>');
+            el.dataset.showing = 'ja';
+        } else {
+            el.dataset.showing = 'zh';
+        }
+    }).catch(function () {
+        btn.textContent = '翻译';
+        btn.disabled = false;
+        el.dataset.showing = 'zh';
+    });
+};
+
 function _updateReadReceiptsDOM() {
     const container = DOMElements.chatContainer;
     const rrStyle = settings.readReceiptStyle || 'icon';
@@ -1205,7 +1267,6 @@ function renderMessages(preserveScroll = false) {
             container.scrollTop = container.scrollHeight;
         });
     }
-    if (window._applyChatLanguage) window._applyChatLanguage();
 }
 
 const addMessage = (message) => {
@@ -1256,7 +1317,6 @@ const addMessage = (message) => {
         container.scrollTop = container.scrollHeight;
     });
 
-    if (window._applyChatLanguage) window._applyChatLanguage();
 
     throttledSaveData();
 };
@@ -1391,6 +1451,10 @@ const addMessage = (message) => {
             const imageFile = DOMElements.imageInput.files[0];
             if (!text && !imageFile && type === 'normal') return;
 
+            // ── 发送时自动翻译为日语：界面显示日语，messages 数组存中文原文 ──
+            let _sendText = text;
+            let _originalText = null;
+
             // ── 斜杠指令拦截 ──
             if (text && text.startsWith('/') && type === 'normal') {
                 const cmd = text.replace(/\s+/g, '').toLowerCase();
@@ -1420,7 +1484,7 @@ const addMessage = (message) => {
                 const messageData = {
                     id: Date.now(),
                     sender: 'user',
-                    text: text || '',
+                    text: _sendText || '',
                     timestamp: new Date(),
                     image: imgSrc,
                     status: 'sent',
@@ -1430,6 +1494,7 @@ const addMessage = (message) => {
                     type: type
                 };
                 if (type === 'system') messageData.sender = null;
+                if (_originalText && _originalText !== _sendText) messageData.originalText = _originalText;
 
                 addMessage(messageData);
                 if (type !== 'system') playSound('send');
@@ -1485,6 +1550,13 @@ if (!isBatchMode && type === 'normal') {
             if (imageFile) {
                 showNotification('正在优化图片...', 'info', 1500);
                 optimizeImage(imageFile).then(createMessage).catch(() => showNotification('图片处理失败', 'error'));
+            } else if (type === 'normal' && !textOverride && text && !isBatchMode && window.Translation && typeof window.Translation.translateText === 'function') {
+                // 自动翻译：输入中文 → 界面显示日语（存中文原文）；翻译失败回退中文原文
+                window.Translation.translateText(text, 'ja').then(t => {
+                    const ja = (t && String(t).trim() && String(t).trim() !== text) ? String(t).trim() : null;
+                    if (ja) { _sendText = ja; _originalText = text; }
+                    createMessage();
+                }).catch(() => { createMessage(); });
             } else {
                 createMessage();
             }
@@ -1682,7 +1754,7 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
             for (let i = 0; i < replyCount; i++) {
                 const delayRange = settings.replyDelayMax - settings.replyDelayMin;
                 delay += settings.replyDelayMin + Math.random() * delayRange;
-                setTimeout(async () => {
+                setTimeout(() => {
                     try {
                     const replyPool = replyPoolOnce;
                     // 被屏蔽或无效项直接换下一个，尽量保证每次都产出可用回复
@@ -1699,15 +1771,6 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                         return;
                     }
 
-                    // ── 中日双语：回复语言为日语时，先翻译字卡主文字 ──
-                    if (window.getReplyLanguage && window.getReplyLanguage() === 'ja' && replyText) {
-                        try {
-                            const _jaReply = await window._translateForReply(replyText);
-                            if (_jaReply && String(_jaReply).trim() && String(_jaReply).trim() !== replyText) {
-                                replyText = String(_jaReply).trim();
-                            }
-                        } catch (e) {}
-                    }
 
                     let disabledStickerItems = new Set();
                     try {
