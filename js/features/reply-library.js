@@ -259,6 +259,7 @@ function renderReplyLibrary() {
     } else {
         _renderAtmosphereList(list, filtered);
     }
+    if (window._localizeReplyLibrary) window._localizeReplyLibrary();
 }
 
 function _renderModernToolbar() {
@@ -309,7 +310,7 @@ function _renderModernToolbar() {
                         data-filter="${g.id}"
                         style="${_activeGroupFilter === g.id ? `background:${g.color}22;border-color:${g.color};color:${g.color};` : ''}">
                         <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${g.color || '#aaa'};margin-right:4px;flex-shrink:0;vertical-align:middle;"></span>
-                        ${g.name} <span class="gfp-count">${cnt}</span>
+                        <span data-rl-gfp="1">${g.name}</span> <span class="gfp-count">${cnt}</span>
                         ${g.disabled ? `<span style="font-size:9px;opacity:0.7;margin-left:2px;">${ICONS.eyeOff}</span>` : ''}
                     </button>`;
                 }).join('')}
@@ -436,6 +437,8 @@ function _renderModernToolbar() {
 
         ${batchActionsHtml}
     `;
+
+    toolbar.querySelectorAll('[data-rl-gfp]').forEach(el => { el.dataset.original = el.textContent; });
 
     toolbar.querySelector('#tb-search-btn').onclick = () => {
         _searchVisible = !_searchVisible;
@@ -612,7 +615,7 @@ function _renderGroupBlock(list, group, groupItems, disabledSet, isUngrouped = f
         <div class="rl-group-header${isCollapsed ? ' collapsed' : ''}" id="grp-hdr-${group.id}" style="${isDisabled ? 'opacity:0.5;' : ''}">
             <div class="rl-group-tag" id="grp-tag-${group.id}" title="${isDisabled ? '点击启用此分组' : '点击屏蔽此分组'}">
                 <span style="width:8px;height:8px;border-radius:50%;background:${colorDot};flex-shrink:0;"></span>
-                <span style="font-size:12px;font-weight:700;color:${colorDot};">${group.name}</span>
+                <span style="font-size:12px;font-weight:700;color:${colorDot};" data-rl-group-name="1">${group.name}</span>
                 ${isDisabled ? `<span title="已屏蔽" style="color:${colorDot};">${ICONS.eyeOff}</span>` : ''}
             </div>
             <span style="font-size:11px;color:var(--text-secondary);">${groupItems.length} 条</span>
@@ -641,6 +644,7 @@ function _renderGroupBlock(list, group, groupItems, disabledSet, isUngrouped = f
         <div class="rl-group-body" id="grp-body-${group.id}" style="display:${isCollapsed ? 'none' : 'block'};">
         </div>
     `;
+    section.querySelectorAll('[data-rl-group-name]').forEach(el => { el.dataset.original = el.textContent; });
     list.appendChild(section);
 
     const body = section.querySelector(`#grp-body-${group.id}`);
@@ -709,6 +713,7 @@ function _renderCardList(container, itemsWithIdx, disabledSet) {
                 moreFrag.appendChild(_createCard(text, idx, disabledSet));
             });
             container.appendChild(moreFrag);
+            if (window._localizeReplyLibrary) window._localizeReplyLibrary();
         };
         frag.appendChild(btn);
     }
@@ -734,14 +739,14 @@ function _createCard(item, index, disabledSet) {
             margin-top:5px;flex-shrink:0;
         ">
             <span style="width:5px;height:5px;border-radius:50%;background:${g.color};flex-shrink:0;"></span>
-            ${g.name}
+            <span data-rl-group-badge="1">${g.name}</span>
         </span>`;
     })();
 
     const itemParts = item.split('|');
     const displayText = itemParts.length > 1
-        ? `<span style="font-size:13px;">${itemParts[0]}</span><span style="font-size:11px;opacity:0.6;display:block;margin-top:1px;">${itemParts[1]}</span>`
-        : `<span style="font-size:13px;">${item}</span>`;
+        ? `<span style="font-size:13px;" data-rl-main="1">${itemParts[0]}</span><span style="font-size:11px;opacity:0.6;display:block;margin-top:1px;">${itemParts[1]}</span>`
+        : `<span style="font-size:13px;" data-rl-main="1">${item}</span>`;
 
     if (_batchModeActive) {
         div.style.cssText = 'cursor:pointer;';
@@ -758,6 +763,10 @@ function _createCard(item, index, disabledSet) {
                 ${groupBadge}
             </div>
         `;
+        const _mainElB = div.querySelector('[data-rl-main]');
+        if (_mainElB) _mainElB.dataset.original = itemParts.length > 1 ? itemParts[0] : item;
+        div.querySelectorAll('[data-rl-group-badge]').forEach(el => { if (!el.dataset.original) el.dataset.original = el.textContent; });
+
         div.addEventListener('click', () => {
             if (_batchSelectedIndices.has(index)) _batchSelectedIndices.delete(index);
             else _batchSelectedIndices.add(index);
@@ -786,6 +795,10 @@ function _createCard(item, index, disabledSet) {
             </button>
         </div>
     `;
+
+    const _mainEl = div.querySelector('[data-rl-main]');
+    if (_mainEl) _mainEl.dataset.original = itemParts.length > 1 ? itemParts[0] : item;
+    div.querySelectorAll('[data-rl-group-badge]').forEach(el => { if (!el.dataset.original) el.dataset.original = el.textContent; });
 
     div.querySelector('[data-action="delete"]').onclick = (e) => { e.stopPropagation(); deleteItem(index); };
     div.querySelector('[data-action="edit"]').onclick = (e) => { e.stopPropagation(); editItem(index, item); };
