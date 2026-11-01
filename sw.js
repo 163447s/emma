@@ -1,9 +1,9 @@
 /* milk字卡 PWA Service Worker
- * 缓存版本号：v2 —— 修改网站代码后，请同步更新此版本号（如 v3），
+ * 缓存版本号：v3 —— 修改网站代码后，请同步更新此版本号（如 v4），
  * 并更新 index.html 中 js 文件的 ?v= 参数，用户才会加载到新版本。
- * v2：更换应用图标为「双月交织」版。
+ * v3：图标 URL 加版本参数（?v=2），强制刷新已安装的图标缓存。
  */
-const CACHE_NAME = 'milk-emma-v2';
+const CACHE_NAME = 'milk-emma-v3';
 
 /* 核心资源（同源，首次访问时预缓存） */
 const CORE_ASSETS = [
@@ -30,10 +30,10 @@ const CORE_ASSETS = [
   './js/onboarding.js',
   './js/listeners.js',
   './js/app.js',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/icon-192.png?v=2',
+  './icons/icon-512.png?v=2',
+  './icons/icon-maskable-512.png?v=2',
+  './icons/apple-touch-icon.png?v=2'
 ];
 
 /* 外部 CDN 资源（尽力缓存，失败不影响安装） */
