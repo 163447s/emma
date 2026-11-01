@@ -338,6 +338,18 @@
         }
     }
 
+    // ── 发中文：偶尔想直发中文原文时使用（不翻译）─────
+    function _getInputText() {
+        const input = document.getElementById('message-input');
+        return input ? input.value.trim() : '';
+    }
+    function sendAsChinese() {
+        const text = _getInputText();
+        if (!text) return;
+        // 以 textOverride 传入：sendMessage 走原文发送分支，不触发自动翻译
+        if (typeof sendMessage === 'function') sendMessage(text, 'normal');
+    }
+
     // ── API Key 配置弹窗 ────────────────────────────────
     let _configModal = null;
     function buildConfigModal() {
@@ -414,6 +426,15 @@
         const style = document.createElement('style');
         style.id = 'translation-module-style';
         style.textContent = `
+            #translate-send-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 12px 0; }
+            #translate-send-bar .ts-btn {
+                border: 1.5px solid var(--border-color); background: var(--primary-bg);
+                color: var(--text-secondary); font-size: 11.5px; font-weight: 600;
+                padding: 4px 12px; border-radius: 20px; cursor: pointer;
+                font-family: var(--font-family); transition: all 0.18s; line-height: 1.6;
+            }
+            #translate-send-bar .ts-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            #translate-send-bar .ts-btn:disabled { opacity: 0.45; cursor: not-allowed; }
             .msg-translate-btn {
                 position: absolute; top: 4px; right: 6px; z-index: 3;
                 font-size: 10px; line-height: 1; padding: 3px 7px;
@@ -431,6 +452,9 @@
 
     // ── 初始化 ───────────────────────────────────────────
     function bindEvents() {
+        const sendZh = document.getElementById('translate-send-zh');
+        if (sendZh) sendZh.addEventListener('click', sendAsChinese);
+
         const configEntry = document.getElementById('translate-config-entry');
         if (configEntry) configEntry.addEventListener('click', openConfig);
     }
@@ -454,6 +478,7 @@
         getKeys: getKeys,
         hasKeys: hasKeys,
         saveKeys: saveKeys,
-        openConfig: openConfig
+        openConfig: openConfig,
+        sendAsChinese: sendAsChinese
     };
 })();
