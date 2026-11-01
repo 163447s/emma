@@ -56,6 +56,7 @@
         }
         function binl2utf8bytes(str) {
             // 将字符串转成 UTF-8 字节后再按 32 位组装，保证中文签名与官方一致
+            const mask = (1 << 8) - 1;
             const bytes = [];
             for (let i = 0; i < str.length; i++) {
                 let c = str.charCodeAt(i);
@@ -302,7 +303,10 @@
             attempts.push({ q, from: 'auto', to: toLang, appKey: appId, salt, sign: sha, signType: 'v3', curtime });
         }
         // 方案2（兼容旧版）：signType=v3 + md5(appKey+input+salt+secret)，无 curtime
-        attempts.push({ q, from: 'auto', to: toLang, appKey: appId, salt, sign: md5(appId + input + salt + appSecret), signType: 'v3' });
+        // 签名计算失败（如 md5 异常）时跳过该方案，不阻塞正确方案
+        try {
+            attempts.push({ q, from: 'auto', to: toLang, appKey: appId, salt, sign: md5(appId + input + salt + appSecret), signType: 'v3' });
+        } catch (e) {}
 
         for (const attempt of attempts) {
             try {
