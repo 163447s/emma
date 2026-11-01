@@ -1,8 +1,9 @@
 /* milk字卡 PWA Service Worker
- * 缓存版本号：v1 —— 修改网站代码后，请同步更新此版本号（如 v2），
+ * 缓存版本号：v2 —— 修改网站代码后，请同步更新此版本号（如 v3），
  * 并更新 index.html 中 js 文件的 ?v= 参数，用户才会加载到新版本。
+ * v2：更换应用图标为「双月交织」版。
  */
-const CACHE_NAME = 'milk-emma-v1';
+const CACHE_NAME = 'milk-emma-v2';
 
 /* 核心资源（同源，首次访问时预缓存） */
 const CORE_ASSETS = [
