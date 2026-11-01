@@ -247,31 +247,55 @@
     function _truncateQ(q) {
         return q.length <= 20 ? q : q.substring(0, 10) + q.length + q.substring(q.length - 10);
     }
+    // sha256（官方最新 v3 方案，需要 WebCrypto；https/file 安全上下文可用）
+    async function _sha256Hex(str) {
+        try {
+            if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+                const data = new TextEncoder().encode(str);
+                const buf = await crypto.subtle.digest('SHA-256', data);
+                return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+        } catch (e) {}
+        return null;
+    }
     async function _callYoudao(q, toLang) {
         const { appId, appSecret } = getKeys();
         if (!appId || !appSecret) return null; // 未配置密钥 → 由调用方回退原文
         const salt = String(Date.now()) + String(Math.floor(Math.random() * 100000));
-        const sign = md5(appId + _truncateQ(q) + salt + appSecret);
+        const curtime = String(Math.round(Date.now() / 1000));
+        const input = _truncateQ(q);
 
-        const params = new URLSearchParams();
-        params.set('q', q);
-        params.set('from', 'auto');
-        params.set('to', toLang);
-        params.set('appKey', appId);
-        params.set('salt', salt);
-        params.set('sign', sign);
-        params.set('signType', 'v3');
+        // 方案1（官方现行）：signType=v3 + sha256(appKey+input+salt+curtime+secret) + curtime
+        const attempts = [];
+        const sha = await _sha256Hex(appId + input + salt + curtime + appSecret);
+        if (sha) {
+            attempts.push({ q, from: 'auto', to: toLang, appKey: appId, salt, sign: sha, signType: 'v3', curtime });
+        }
+        // 方案2（兼容旧版）：signType=v3 + md5(appKey+input+salt+secret)，无 curtime
+        attempts.push({ q, from: 'auto', to: toLang, appKey: appId, salt, sign: md5(appId + input + salt + appSecret), signType: 'v3' });
 
-        const resp = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: params.toString()
-        });
-        if (!resp.ok) return null;
-        const data = await resp.json();
-        if (data && data.errorCode === '0' && Array.isArray(data.translation) && data.translation.length) {
-            const t = String(data.translation[0] || '').trim();
-            return t || null;
+        for (const attempt of attempts) {
+            try {
+                const params = new URLSearchParams();
+                Object.keys(attempt).forEach(k => params.set(k, attempt[k]));
+                const resp = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString()
+                });
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                if (data && data.errorCode === '0' && Array.isArray(data.translation) && data.translation.length) {
+                    const t = String(data.translation[0] || '').trim();
+                    if (t) return t;
+                }
+                if (data && (String(data.errorCode) === '105' || String(data.errorCode) === '106')) {
+                    continue; // 签名/签名类型问题 → 尝试下一个方案
+                }
+                break; // 其他错误（108/110/111/112/113/联网失败等）重试无意义
+            } catch (e) {
+                continue;
+            }
         }
         return null;
     }
