@@ -258,9 +258,39 @@
         } catch (e) {}
         return null;
     }
+    // JSONP 调用（浏览器跨域专用：有道 API 不支持 CORS，官方 JS demo 即用 JSONP）
+    function _jsonp(url, callbackName, timeoutMs) {
+        return new Promise(function (resolve, reject) {
+            const script = document.createElement('script');
+            let done = false;
+            const timer = setTimeout(function () {
+                cleanup();
+                reject(new Error('jsonp timeout'));
+            }, timeoutMs || 12000);
+            function cleanup() {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                try { delete window[callbackName]; } catch (e) { window[callbackName] = undefined; }
+                if (script.parentNode) script.parentNode.removeChild(script);
+            }
+            window[callbackName] = function (data) {
+                cleanup();
+                resolve(data);
+            };
+            script.onerror = function () {
+                cleanup();
+                reject(new Error('jsonp error'));
+            };
+            script.src = url;
+            document.head.appendChild(script);
+        });
+    }
     async function _callYoudao(q, toLang) {
         const { appId, appSecret } = getKeys();
         if (!appId || !appSecret) return null; // 未配置密钥 → 由调用方回退原文
+        // JSONP 走 GET，URL 长度有限：超长文本直接回退原文
+        if (String(q).length > 300) return null;
         const salt = String(Date.now()) + String(Math.floor(Math.random() * 100000));
         const curtime = String(Math.round(Date.now() / 1000));
         const input = _truncateQ(q);
@@ -276,15 +306,9 @@
 
         for (const attempt of attempts) {
             try {
-                const params = new URLSearchParams();
-                Object.keys(attempt).forEach(k => params.set(k, attempt[k]));
-                const resp = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: params.toString()
-                });
-                if (!resp.ok) continue;
-                const data = await resp.json();
+                const qs = Object.keys(attempt).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(attempt[k])).join('&');
+                const cbName = '__yd_cb_' + Math.random().toString(36).slice(2, 10);
+                const data = await _jsonp(API_URL + '?callback=' + cbName + '&' + qs, cbName, 12000);
                 if (data && data.errorCode === '0' && Array.isArray(data.translation) && data.translation.length) {
                     const t = String(data.translation[0] || '').trim();
                     if (t) return t;
@@ -292,7 +316,7 @@
                 if (data && (String(data.errorCode) === '105' || String(data.errorCode) === '106')) {
                     continue; // 签名/签名类型问题 → 尝试下一个方案
                 }
-                break; // 其他错误（108/110/111/112/113/联网失败等）重试无意义
+                break; // 其他错误（108/110/111/112/113/超时等）重试无意义
             } catch (e) {
                 continue;
             }
