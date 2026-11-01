@@ -338,16 +338,25 @@
         }
     }
 
-    // ── 发中文：偶尔想直发中文原文时使用（不翻译）─────
-    function _getInputText() {
-        const input = document.getElementById('message-input');
-        return input ? input.value.trim() : '';
+    // ── 发送模式：发中文 / 发日本語（Enter 按下按当前选中模式发送）──
+    const SEND_LANG_KEY = 'sendLangPreference';
+    function getSendLang() {
+        try { return localStorage.getItem(SEND_LANG_KEY) === 'zh' ? 'zh' : 'ja'; } catch (e) { return 'ja'; }
     }
-    function sendAsChinese() {
-        const text = _getInputText();
-        if (!text) return;
-        // 以 textOverride 传入：sendMessage 走原文发送分支，不触发自动翻译
-        if (typeof sendMessage === 'function') sendMessage(text, 'normal');
+    function setSendLang(lang) {
+        const v = lang === 'zh' ? 'zh' : 'ja';
+        try { localStorage.setItem(SEND_LANG_KEY, v); } catch (e) {}
+        refreshSendLangButtons();
+        if (typeof showNotification === 'function') {
+            showNotification(v === 'zh' ? '已切换：Enter 将以中文原文发送' : '已切换：Enter 将自动翻译为日语发送', 'success', 1600);
+        }
+    }
+    function refreshSendLangButtons() {
+        const zh = document.getElementById('translate-send-zh');
+        const ja = document.getElementById('translate-send-ja');
+        const cur = getSendLang();
+        if (zh) zh.classList.toggle('active', cur === 'zh');
+        if (ja) ja.classList.toggle('active', cur === 'ja');
     }
 
     // ── API Key 配置弹窗 ────────────────────────────────
@@ -434,6 +443,7 @@
                 font-family: var(--font-family); transition: all 0.18s; line-height: 1.6;
             }
             #translate-send-bar .ts-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            #translate-send-bar .ts-btn.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); font-weight: 700; }
             #translate-send-bar .ts-btn:disabled { opacity: 0.45; cursor: not-allowed; }
             .msg-translate-btn {
                 position: absolute; top: 4px; right: 6px; z-index: 3;
@@ -453,7 +463,9 @@
     // ── 初始化 ───────────────────────────────────────────
     function bindEvents() {
         const sendZh = document.getElementById('translate-send-zh');
-        if (sendZh) sendZh.addEventListener('click', sendAsChinese);
+        if (sendZh) sendZh.addEventListener('click', () => setSendLang('zh'));
+        const sendJa = document.getElementById('translate-send-ja');
+        if (sendJa) sendJa.addEventListener('click', () => setSendLang('ja'));
 
         const configEntry = document.getElementById('translate-config-entry');
         if (configEntry) configEntry.addEventListener('click', openConfig);
@@ -461,6 +473,7 @@
 
     function init() {
         injectStyles();
+        refreshSendLangButtons();
         bindEvents();
     }
 
@@ -479,6 +492,7 @@
         hasKeys: hasKeys,
         saveKeys: saveKeys,
         openConfig: openConfig,
-        sendAsChinese: sendAsChinese
+        getSendLang: getSendLang,
+        setSendLang: setSendLang
     };
 })();

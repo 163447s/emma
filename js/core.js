@@ -1551,12 +1551,17 @@ if (!isBatchMode && type === 'normal') {
                 showNotification('正在优化图片...', 'info', 1500);
                 optimizeImage(imageFile).then(createMessage).catch(() => showNotification('图片处理失败', 'error'));
             } else if (type === 'normal' && !textOverride && text && !isBatchMode && window.Translation && typeof window.Translation.translateText === 'function') {
-                // 自动翻译：输入中文 → 界面显示日语（存中文原文）；翻译失败回退中文原文
-                window.Translation.translateText(text, 'ja').then(t => {
-                    const ja = (t && String(t).trim() && String(t).trim() !== text) ? String(t).trim() : null;
-                    if (ja) { _sendText = ja; _originalText = text; }
+                // 按发送模式处理：发日本語 → 自动翻译为日语；发中文 → 直接发原文
+                const sendLang = (window.Translation.getSendLang ? window.Translation.getSendLang() : 'ja');
+                if (sendLang === 'zh') {
                     createMessage();
-                }).catch(() => { createMessage(); });
+                } else {
+                    window.Translation.translateText(text, 'ja').then(t => {
+                        const ja = (t && String(t).trim() && String(t).trim() !== text) ? String(t).trim() : null;
+                        if (ja) { _sendText = ja; _originalText = text; }
+                        createMessage();
+                    }).catch(() => { createMessage(); });
+                }
             } else {
                 createMessage();
             }
