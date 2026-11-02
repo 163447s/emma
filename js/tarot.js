@@ -174,7 +174,7 @@
             + '<span class="tarot-card-name">' + name + '</span>'
             + '<span class="tarot-card-pos ' + (card.upright ? 'pos-up' : 'pos-rev') + '">' + pos + '</span>'
             + '</div>'
-            + '<div class="tarot-card-hint"><i class="fas fa-crystal-ball"></i> 点击解读</div>'
+            + '<div class="tarot-card-hint"><i class="fas fa-wand-magic-sparkles"></i> 点击解读</div>'
             + '</div>';
     }
 
@@ -229,7 +229,7 @@
         modal.innerHTML = `
             <div class="modal-content" style="max-width:460px;width:92%;">
                 <div class="modal-title" id="tarot-reading-title">
-                    <i class="fas fa-crystal-ball"></i><span>塔罗解读</span>
+                    <i class="fas fa-wand-magic-sparkles"></i><span>塔罗解读</span>
                 </div>
                 <div id="tarot-reading-body" style="display:flex;gap:16px;align-items:flex-start;">
                     <div id="tarot-reading-art" style="flex-shrink:0;width:130px;"></div>
@@ -359,7 +359,7 @@
         modal.innerHTML = `
             <div class="modal-content" style="max-width:440px;">
                 <div class="modal-title">
-                    <i class="fas fa-crystal-ball"></i><span>MJ 塔罗</span>
+                    <i class="fas fa-wand-magic-sparkles"></i><span>MJ 塔罗</span>
                 </div>
                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;margin-bottom:14px;">
                     MJ 在聊天回复中有概率发一张塔罗牌（替代普通字卡），点牌面弹出解读。
