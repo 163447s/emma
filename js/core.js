@@ -966,6 +966,54 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
         return fragment;
     }
 
+    // ── 塔罗牌消息：卡牌样式气泡（点击弹解读）──
+    if (msg.type === 'tarot') {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'message-wrapper received';
+        wrapper.dataset.id = msg.id;
+        wrapper.dataset.msgId = msg.id;
+
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'message-avatar';
+        if (settings.inChatAvatarEnabled) {
+            const avatarElement = DOMElements.partner.avatar;
+            avatarDiv.innerHTML = avatarElement.innerHTML;
+            if (typeof applyAvatarFrame === 'function') applyAvatarFrame(avatarDiv, settings.partnerAvatarFrame);
+            ['circle', 'square', 'pentagon', 'heart'].forEach(s => avatarDiv.classList.remove('shape-' + s));
+            const avatarShape = settings.partnerAvatarShape || 'circle';
+            if (avatarShape !== 'none') avatarDiv.classList.add('shape-' + avatarShape);
+        } else {
+            avatarDiv.style.display = 'none';
+        }
+        wrapper.appendChild(avatarDiv);
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'message-content-wrapper';
+
+        const cardBox = document.createElement('div');
+        cardBox.className = 'tarot-card-msg' + (msg.tarot && !msg.tarot.upright ? ' reversed' : '');
+        cardBox.title = '点击查看解读';
+        cardBox.onclick = function () { if (window.Tarot) window.Tarot.openReadingFromMessage(cardBox); };
+        cardBox.innerHTML = (window.Tarot && typeof window.Tarot.renderCardInner === 'function')
+            ? window.Tarot.renderCardInner(msg.tarot)
+            : '';
+
+        let tarotActionsHTML = '';
+        if (settings.replyEnabled) tarotActionsHTML += `<button class="meta-action-btn reply-btn" title="回复"><i class="fas fa-reply"></i></button>`;
+        const tarotStarIcon = msg.favorited ? 'fas fa-star' : 'far fa-star';
+        tarotActionsHTML += `<button class="meta-action-btn favorite-action-btn ${msg.favorited ? 'favorited' : ''}" title="${msg.favorited ? '取消收藏' : '收藏'}"><i class="${tarotStarIcon}"></i></button>`;
+        tarotActionsHTML += `<button class="meta-action-btn delete-btn" title="删除"><i class="fas fa-trash-alt"></i></button>`;
+        const tarotActionsDiv = document.createElement('div');
+        tarotActionsDiv.className = 'message-meta-actions';
+        tarotActionsDiv.innerHTML = tarotActionsHTML;
+
+        contentWrapper.append(cardBox, tarotActionsDiv);
+        wrapper.appendChild(contentWrapper);
+        fragment.appendChild(wrapper);
+        lastSenderRef.current = msg.sender;
+        return fragment;
+    }
+
     let showTimestamp = true;
     if (settings.timeFormat === 'off') {
         showTimestamp = false;
@@ -1723,6 +1771,62 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
             if (Math.random() < 0.03) {
                 // ── 对方拍一拍：调用提取的通用函数（同时供 /测试拍一拍 指令使用）──
                 if (typeof window._triggerPartnerPoke === 'function') window._triggerPartnerPoke();
+                return;
+            }
+
+            // ── MJ 塔罗：按概率发塔罗牌而非普通字卡 ──
+            if (window.Tarot && typeof window.Tarot.isEnabled === 'function'
+                && window.Tarot.isEnabled() && Math.random() < window.Tarot.getProbability()) {
+                showTypingIndicator();
+                const tarotDelayRange = settings.replyDelayMax - settings.replyDelayMin;
+                const tarotDelay = settings.replyDelayMin + Math.random() * tarotDelayRange;
+                setTimeout(() => {
+                    try {
+                        const card = window.Tarot.drawCard();
+                        const recentUserMsgsForTarot = settings.replyEnabled
+                            ? messages.filter(m => m.sender === 'user' && m.text).slice(-5)
+                            : [];
+                        const q = recentUserMsgsForTarot.length
+                            ? recentUserMsgsForTarot[recentUserMsgsForTarot.length - 1].text
+                            : '';
+                        addMessage({
+                            id: Date.now(),
+                            sender: settings.partnerName || '对方',
+                            text: '',
+                            timestamp: new Date(),
+                            status: 'received',
+                            favorited: false,
+                            note: null,
+                            type: 'tarot',
+                            tarot: {
+                                i: card.i,
+                                name: card.name,
+                                en: card.en,
+                                upright: !!card.upright,
+                                u: card.u || '',
+                                r: card.r || '',
+                                question: String(q || '').slice(0, 200)
+                            }
+                        });
+                        playSound('message');
+                        if (typeof window._sendPartnerNotification === 'function') {
+                            window._sendPartnerNotification(settings.partnerName || '对方', '🔮 ' + card.name + (card.upright ? '（正位）' : '（逆位）'));
+                        }
+                    } catch (e) {
+                        console.error('[simulateReply] 塔罗牌出错:', e);
+                    }
+                    (function(){
+                        try { if (window._typingIndicatorAutoHideTimer) { clearTimeout(window._typingIndicatorAutoHideTimer); window._typingIndicatorAutoHideTimer = null; } } catch (e2) {}
+                        var _tiW = document.getElementById('typing-indicator-wrapper');
+                        if (_tiW) {
+                            var _tiInner = _tiW.querySelector('.typing-indicator');
+                            if (_tiInner) {
+                                _tiInner.classList.add('hiding');
+                                setTimeout(function() { _tiW.style.display = 'none'; if (_tiInner) _tiInner.classList.remove('hiding'); }, 240);
+                            } else { _tiW.style.display = 'none'; }
+                        }
+                    })();
+                }, tarotDelay);
                 return;
             }
 
