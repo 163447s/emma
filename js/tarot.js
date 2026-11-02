@@ -237,7 +237,14 @@
                         <div id="tarot-reading-name" style="font-size:17px;font-weight:700;color:var(--text-primary);"></div>
                         <div id="tarot-reading-pos" style="display:inline-block;font-size:11px;font-weight:600;padding:2px 10px;border-radius:12px;margin:6px 0 10px;"></div>
                         <div id="tarot-reading-question" style="font-size:11.5px;color:var(--text-secondary);line-height:1.7;margin-bottom:8px;display:none;"></div>
-                        <div id="tarot-reading-text" style="font-size:13.5px;color:var(--text-primary);line-height:1.9;white-space:pre-wrap;word-break:break-word;max-height:42vh;overflow-y:auto;"></div>
+                        <div id="tarot-reading-meaning" style="font-size:12.5px;color:var(--text-secondary);line-height:1.8;white-space:pre-wrap;word-break:break-word;margin-bottom:12px;display:none;"></div>
+                        <div id="tarot-reading-mj" style="display:none;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                <div id="tarot-reading-avatar" style="width:34px;height:34px;border-radius:50%;overflow:hidden;flex-shrink:0;background:var(--secondary-bg);border:2px solid rgba(var(--accent-color-rgb),0.35);display:flex;align-items:center;justify-content:center;"></div>
+                                <div style="font-size:13px;font-weight:700;color:var(--accent-color);">MJ 想对你说</div>
+                            </div>
+                            <div id="tarot-reading-mj-text" style="font-size:13.5px;color:var(--text-primary);line-height:1.9;white-space:pre-wrap;word-break:break-word;max-height:30vh;overflow-y:auto;"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-buttons">
@@ -252,13 +259,50 @@
         return modal;
     }
 
+    // 复用站点头像（梦角/MJ 当前头像），没有则用默认图标
+    function setMjAvatar(el) {
+        if (!el) return;
+        const img = document.querySelector('#partner-avatar img');
+        if (img && img.src && !img.src.endsWith('#') && img.src !== window.location.href) {
+            const src = String(img.src).replace(/"/g, '&quot;');
+            el.innerHTML = '<img src="' + src + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+        } else {
+            el.innerHTML = '<i class="fas fa-user" style="font-size:15px;color:var(--text-secondary);"></i>';
+        }
+    }
+
+    // 把 AI 两段式解读拆成「牌的意思」+「MJ 想对你说」
+    function renderAiText(meaningEl, mjTextEl, mjBlock, aiText) {
+        const t = String(aiText || '').trim();
+        const mjIdx = t.search(/MJ\s*想对你说|想对你说/);
+        if (mjIdx < 0) {
+            // AI 没按格式输出：整段放进 MJ 区
+            meaningEl.style.display = 'none';
+            mjBlock.style.display = 'block';
+            mjTextEl.textContent = t;
+            return;
+        }
+        const meaning = t.slice(0, mjIdx).replace(/^牌\s*的意思[：:]\s*/, '').trim();
+        const mjPart = t.slice(mjIdx).replace(/^MJ\s*想对你说[：:]\s*/, '').trim();
+        if (meaning) {
+            meaningEl.style.display = 'block';
+            meaningEl.textContent = meaning;
+        } else {
+            meaningEl.style.display = 'none';
+        }
+        mjBlock.style.display = 'block';
+        mjTextEl.textContent = mjPart || t;
+    }
+
     function openReading(card, question) {
         const modal = buildReadingModal();
         const artEl = modal.querySelector('#tarot-reading-art');
         const nameEl = modal.querySelector('#tarot-reading-name');
         const posEl = modal.querySelector('#tarot-reading-pos');
         const qEl = modal.querySelector('#tarot-reading-question');
-        const textEl = modal.querySelector('#tarot-reading-text');
+        const meaningEl = modal.querySelector('#tarot-reading-meaning');
+        const mjBlock = modal.querySelector('#tarot-reading-mj');
+        const mjTextEl = modal.querySelector('#tarot-reading-mj-text');
         const pos = card.upright ? '正位' : '逆位';
 
         nameEl.textContent = card.name || '';
@@ -273,7 +317,10 @@
         } else {
             qEl.style.display = 'none';
         }
-        textEl.textContent = '解读中...';
+        setMjAvatar(modal.querySelector('#tarot-reading-avatar'));
+        meaningEl.style.display = 'none';
+        mjBlock.style.display = 'block';
+        mjTextEl.textContent = '解读中...';
 
         if (typeof showModal === 'function') showModal(modal); else modal.style.display = 'flex';
 
@@ -281,11 +328,13 @@
             if (!document.body.contains(modal) || modal.style.display === 'none') return;
             const local = card.upright ? card.u : card.r;
             if (aiText) {
-                textEl.textContent = aiText;
+                renderAiText(meaningEl, mjTextEl, mjBlock, aiText);
             } else if (local) {
-                textEl.textContent = local + '\n\n（本地预设解读；在「设置 → 高级功能 → MJ 塔罗」填入 Worker 地址后，会由 MJ 亲自解读）';
+                meaningEl.style.display = 'none';
+                mjBlock.style.display = 'block';
+                mjTextEl.textContent = local + '\n\n（本地预设解读；在「设置 → 高级功能 → MJ 塔罗」填入 Worker 地址后，会由 MJ 亲自解读）';
             } else {
-                textEl.textContent = '（暂无解读，请稍后再试）';
+                mjTextEl.textContent = '（暂无解读，请稍后再试）';
             }
         });
     }
