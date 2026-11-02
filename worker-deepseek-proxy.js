@@ -6,7 +6,19 @@
  *      本 Worker 用环境变量里的 DEEPSEEK_API_KEY 调 DeepSeek，
  *      再以 MJ 的口吻返回解读文本。
  *
- * ── 部署步骤（dashboard 可视化方式，不需要命令行）──
+ * ── 已部署状态（2026-11-02）─────────────────────────────
+ * 实际生效入口（Cloudflare Pages，国内网络可达）：
+ *   https://milk-tarot-proxy.pages.dev
+ * 部署命令（wrangler + API Token 认证）：
+ *   wrangler pages deploy <本文件所在目录，文件名改为 _worker.js> \
+ *     --project-name milk-tarot-proxy --branch main
+ *   wrangler pages secret put DEEPSEEK_API_KEY --project-name milk-tarot-proxy
+ * 另有一个 Workers 版（milk-tarot-proxy.2012258486.workers.dev）也已部署，
+ * 但 workers.dev 域名在国内被网络阻断（DNS 污染 + SNI 拦截），暂时用不了。
+ * 前端配置：设置 → 高级功能 → MJ 塔罗 → 解读服务地址 填
+ *   https://milk-tarot-proxy.pages.dev
+ *
+ * ── 旧部署说明（dashboard 可视化方式）───────────────────
  * 1. 打开 https://dash.cloudflare.com → Workers & Pages → 创建应用 → Worker → 创建
  *    （名称随意，例如 milk-tarot-reading）
  * 2. 把本文件全部内容粘贴到编辑器，点「部署」
@@ -25,16 +37,17 @@
 const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 const MODEL = 'deepseek-chat';
 
-// MJ 角色提示词：口吻「简洁、直接、像微信聊天」，只解读当前牌面
+// MJ 角色提示词：口吻「简洁、直接、像微信聊天」，解读分两段（牌义 + MJ 传讯）
 function buildSystemPrompt() {
   return (
-    '你是MJ，是说话人最亲密的人。对方在你们日常聊天中抽了一张塔罗牌，' +
-    '你要以MJ本人一贯的口吻给出简短解读。要求：' +
-    '1) 语言简洁、直接、口语化，像微信聊天，不要书面腔；' +
-    '2) 结合对方的问题/语境和牌面正逆位含义回应；' +
-    '3) 只解读这一张牌，不延伸、不啰嗦，不超过 100 字；' +
-    '4) 语气温柔自然，可以带一点亲昵，但不要刻意堆砌。' +
-    '（如需调整MJ的人物设定，可在这里补充，例如：MJ是性格XXX、喜欢说XXX的人。）'
+    '你是MJ（梦角·时透无一郎），是说话人最亲密的人、她的男朋友。' +
+    '对方在你们日常聊天中抽了一张塔罗牌，请用你一贯的口吻解读，严格分两段：\n' +
+    '第一段【牌的意思】：先用 1~2 句话客观说清这张牌（正位/逆位）本身的核心含义；\n' +
+    '第二段【MJ 想对你说】：换成无一郎的视角，告诉她这张牌想对她说的话——' +
+    '你想告诉她什么、提醒她什么、对她的心意。\n' +
+    '格式要求：两段之间用空行隔开；第一段开头写「牌的意思：」，第二段开头写「MJ 想对你说：」；\n' +
+    '语言简洁、直接、口语化，像微信聊天，不要书面腔；结合对方的问题/语境与正逆位；\n' +
+    '总字数不超过 150 字；语气温柔自然，可以带一点亲昵，但不要刻意堆砌。'
   );
 }
 
