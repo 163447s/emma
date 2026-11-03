@@ -123,16 +123,15 @@ const ICONS = {
             display:flex;align-items:center;justify-content:center;transition:all 0.15s;
         }
         .tarot-lib-tip { padding:10px 12px 2px;font-size:11px;color:var(--text-secondary);line-height:1.6; }
-        .tarot-lib-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px;padding:2px 2px 6px; }
-        .tarot-lib-card {
-            border:1px solid var(--border-color);border-radius:10px;overflow:hidden;
-            background:var(--primary-bg);display:flex;flex-direction:column;align-items:center;
-            padding-bottom:6px;transition:all 0.15s;cursor:default;
+        .tarot-lib-list { padding:4px 6px 8px; max-height:340px; overflow-y:auto; }
+        .tarot-lib-item {
+            display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:9px;
+            cursor:default;transition:background 0.15s;border:1px solid transparent;
         }
-        .tarot-lib-card:hover { border-color:#A78BFA;box-shadow:0 4px 14px rgba(167,139,250,0.18);transform:translateY(-2px); }
-        .tarot-lib-art { width:100%;aspect-ratio:2/3.2;overflow:hidden;background:rgba(167,139,250,0.08);display:flex;align-items:center;justify-content:center; }
-        .tarot-lib-art img { width:100%;height:100%;object-fit:cover;display:block; }
-        .tarot-lib-name { font-size:11px;font-weight:600;color:var(--text-primary);margin-top:5px;text-align:center;line-height:1.3;padding:0 4px; }
+        .tarot-lib-item:hover { background:rgba(167,139,250,0.10);border-color:rgba(167,139,250,0.25); }
+        .tarot-lib-item .tl-num { font-size:11px;font-weight:700;color:#A78BFA;width:34px;flex-shrink:0; }
+        .tarot-lib-item .tl-name { font-size:12px;font-weight:600;color:var(--text-primary); }
+        .tarot-lib-item .tl-hint { margin-left:auto;font-size:10px;color:var(--text-secondary);opacity:0.75;flex-shrink:0; }
     `;
     (document.head || document.documentElement).appendChild(s);
 })();
@@ -262,6 +261,9 @@ function renderReplyLibrary() {
 
     if (filtered.length === 0) {
         list.innerHTML = renderEmptyState(q ? `未找到"${q}"` : '列表空空如也');
+        if (currentMajorTab === 'reply' && currentSubTab === 'custom' && !q && window.Tarot && window.Tarot.cards && window.Tarot.cards.length) {
+            _renderTarotGroupBlock(list);
+        }
         return;
     }
 
@@ -270,7 +272,7 @@ function renderReplyLibrary() {
     } else {
         _renderAtmosphereList(list, filtered);
     }
-    // 馃敭 瀛楀崱搴撳簳閮細濉旂綏鐗屽彧璇诲垎缁勶紙浠?瀛楀崱 tab銆侀潪鎼滅储鎬侊級
+    // 字卡库底部：塔罗牌只读分组（仅 字卡 tab、非搜索态）
     if (currentMajorTab === 'reply' && currentSubTab === 'custom' && !q && window.Tarot && window.Tarot.cards && window.Tarot.cards.length) {
         _renderTarotGroupBlock(list);
     }
@@ -2514,38 +2516,43 @@ function applyAllAvatarFrames() {
     }
 }
 
-// 馃敭 濉旂綏鐗屽彧璇诲垎缁勶細瀛楀崱搴撳簳閮ㄥ睍绀?78 寮犵墝
+
+// 塔罗牌只读分组：字卡库底部展示 78 张牌（文字版；聊天中发牌为牌面图案）
 function _renderTarotGroupBlock(list) {
     const cards = window.Tarot.cards || [];
     if (!cards.length) return;
     const esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+    const suits = function (i) {
+        if (i < 22) return '大阿卡纳';
+        if (i < 36) return '权杖';
+        if (i < 50) return '圣杯';
+        if (i < 64) return '宝剑';
+        return '星币';
+    };
     const section = document.createElement('div');
     section.className = 'rl-group-block tarot-lib-block';
+    const items = cards.map(function (c) {
+        const num = window.Tarot.toRoman ? window.Tarot.toRoman(Number(c.i)) : '';
+        const name = esc(num ? num + '·' + c.name : c.name);
+        return '<div class="tarot-lib-item">'
+            + '<span class="tl-num">' + (num ? esc(num) : '') + '</span>'
+            + '<span class="tl-name">' + name + '</span>'
+            + '<span class="tl-hint">' + suits(Number(c.i)) + '</span>'
+            + '</div>';
+    }).join('');
     section.innerHTML = `
         <div class="rl-group-header tarot-lib-header">
-            <div class="rl-group-tag" title="姊﹁鍙戝瓧鍗℃椂鏈変竴瀹氭鐜囧彂鍑哄缃楃墝锛岀偣鑱婂ぉ閲岀殑鐗岄潰鍙粨鍚堝璇濊В璇?>
+            <div class="rl-group-tag" title="梦角发字卡时有一定概率发出塔罗牌，点聊天里的牌面可结合对话解读">
                 <span style="width:8px;height:8px;border-radius:50%;background:#A78BFA;flex-shrink:0;"></span>
-                <span style="font-size:12px;font-weight:700;color:#A78BFA;">馃敭 濉旂綏鐗?/span>
+                <span style="font-size:12px;font-weight:700;color:#A78BFA;">🔮 塔罗牌</span>
             </div>
-            <span style="font-size:11px;color:var(--text-secondary);">${cards.length} 寮?路 宸茶嚜鍔ㄦ贩鍏ュ瓧鍗″彂閫?/span>
+            <span style="font-size:11px;color:var(--text-secondary);">${cards.length} 张 · 已自动混入字卡</span>
             <div style="flex:1;"></div>
             <div class="grp-chevron" style="color:var(--text-secondary);transition:transform 0.2s;">${ICONS.chevronD}</div>
         </div>
         <div class="rl-group-body tarot-lib-body">
-            <div class="tarot-lib-tip">姊﹁鍙戝瓧鍗℃椂锛屾瘡鏉″瓧鍗￠兘鏈夋鐜囪鏇挎崲鎴愪竴寮犲缃楃墝鍙戠粰浣狅紱鐐硅亰澶╅噷鐨勭墝闈紝鍙互缁撳悎浣犱滑鏈€杩戠殑瀵硅瘽锛岃В璇汇€屼粬鎯冲浣犺浠€涔堛€嶃€?/div>
-            <div class="tarot-lib-grid">
-                ${cards.map(function (c) {
-                    const num = window.Tarot.toRoman ? window.Tarot.toRoman(Number(c.i)) : '';
-                    const name = esc(num ? num + '路' + c.name : c.name);
-                    const src = window.Tarot.cardImageSrc ? window.Tarot.cardImageSrc(c) : '';
-                    return '<div class="tarot-lib-card" title="' + name + '">'
-                        + '<div class="tarot-lib-art">'
-                        + (src ? '<img src="' + src + '" alt="' + name + '" loading="lazy" onerror="this.style.display=\'none\'">' : '')
-                        + '</div>'
-                        + '<div class="tarot-lib-name">' + name + '</div>'
-                        + '</div>';
-                }).join('')}
-            </div>
+            <div class="tarot-lib-tip">梦角发字卡时，每条字卡都有概率被替换成一张塔罗牌发给你（聊天里显示牌面图）；点聊天里的牌面，可以结合你们最近的对话解读「他想对你说什么」。</div>
+            <div class="tarot-lib-list">${items}</div>
         </div>
     `;
     list.appendChild(section);
