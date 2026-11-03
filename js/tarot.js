@@ -121,6 +121,18 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
+    // 大阿卡纳罗马序号（0 号愚者显示 0）
+    function toRoman(n) {
+        if (!(n >= 0 && n <= 21)) return '';
+        if (n === 0) return '0';
+        var table = [[100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+        var out = '';
+        var v = n;
+        for (var i = 0; i < table.length; i++) {
+            while (v >= table[i][0]) { out += table[i][1]; v -= table[i][0]; }
+        }
+        return out;
+    }
 
     // ── 设置 ──────────────────────────────────────────────
     function getSettings() {
@@ -164,6 +176,8 @@
         if (!card) return '';
         const pos = card.upright ? '正位' : '逆位';
         const name = escapeHtml(card.name || '');
+        const num = toRoman(Number(card.i));
+        const displayName = num ? num + '·' + name : name;
         const img = cardImageSrc(card);
         const art = img
             ? '<img src="' + img + '" alt="' + name + '" loading="lazy" onerror="window._tarotImgFallback&&window._tarotImgFallback(this)">'
@@ -171,7 +185,7 @@
         return '<div class="tarot-card-inner">'
             + '<div class="tarot-card-art">' + art + '</div>'
             + '<div class="tarot-card-info">'
-            + '<span class="tarot-card-name">' + name + '</span>'
+            + '<span class="tarot-card-name">' + displayName + '</span>'
             + '<span class="tarot-card-pos ' + (card.upright ? 'pos-up' : 'pos-rev') + '">' + pos + '</span>'
             + '</div>'
             + '<div class="tarot-card-hint"><i class="fas fa-wand-magic-sparkles"></i> 点击解读</div>'
@@ -194,7 +208,7 @@
     };
 
     // ── AI 解读（DeepSeek，经 Worker 代理）────────────────
-    async function fetchReading(card, question) {
+    async function fetchReading(card, question, context) {
         const s = getSettings();
         if (!s.workerUrl || !/^https?:\/\//.test(s.workerUrl)) return null;
         try {
@@ -204,7 +218,8 @@
                 body: JSON.stringify({
                     cardName: card.name,
                     upright: !!card.upright,
-                    question: String(question || '').slice(0, 300)
+                    question: String(question || '').slice(0, 300),
+                    context: String(context || '').slice(0, 800)
                 })
             });
             if (!res.ok) return null;
@@ -294,7 +309,7 @@
         mjTextEl.textContent = mjPart || t;
     }
 
-    function openReading(card, question) {
+    function openReading(card, question, context) {
         const modal = buildReadingModal();
         const artEl = modal.querySelector('#tarot-reading-art');
         const nameEl = modal.querySelector('#tarot-reading-name');
@@ -304,6 +319,7 @@
         const mjBlock = modal.querySelector('#tarot-reading-mj');
         const mjTextEl = modal.querySelector('#tarot-reading-mj-text');
         const pos = card.upright ? '正位' : '逆位';
+        const ctx = context || card.context || '';
 
         nameEl.textContent = card.name || '';
         posEl.textContent = pos;
@@ -311,9 +327,12 @@
         posEl.style.color = card.upright ? 'var(--accent-color)' : 'var(--text-secondary)';
         artEl.innerHTML = '<div style="width:130px;border-radius:10px;overflow:hidden;box-shadow:0 4px 14px rgba(0,0,0,0.18);background:var(--secondary-bg);">'
             + renderCardInner({ i: card.i, name: card.name, upright: card.upright }) + '</div>';
-        if (question) {
+        if (question || ctx) {
             qEl.style.display = 'block';
-            qEl.textContent = '问题 / 语境：' + String(question);
+            const qs = [];
+            if (question) qs.push('问题 / 语境：' + String(question));
+            if (ctx) qs.push('结合最近对话解读');
+            qEl.textContent = qs.join(' · ');
         } else {
             qEl.style.display = 'none';
         }
@@ -324,7 +343,7 @@
 
         if (typeof showModal === 'function') showModal(modal); else modal.style.display = 'flex';
 
-        fetchReading(card, question).then(function (aiText) {
+        fetchReading(card, question, ctx).then(function (aiText) {
             if (!document.body.contains(modal) || modal.style.display === 'none') return;
             const local = card.upright ? card.u : card.r;
             if (aiText) {
@@ -332,7 +351,7 @@
             } else if (local) {
                 meaningEl.style.display = 'none';
                 mjBlock.style.display = 'block';
-                mjTextEl.textContent = local + '\n\n（本地预设解读；在「设置 → 高级功能 → MJ 塔罗」填入 Worker 地址后，会由 MJ 亲自解读）';
+                mjTextEl.textContent = local + '\n\n（本地预设解读；在「设置 → 高级功能 → MJ 塔罗」填入 Worker 地址后，会结合你们的对话由 MJ 亲自解读）';
             } else {
                 mjTextEl.textContent = '（暂无解读，请稍后再试）';
             }
@@ -345,7 +364,7 @@
         const id = wrapper.dataset.id || wrapper.dataset.msgId;
         const msg = messages.find(function (m) { return String(m.id) === String(id); });
         if (!msg || !msg.tarot) return;
-        openReading(msg.tarot, msg.tarot.question || '');
+        openReading(msg.tarot, msg.tarot.question || '', msg.tarot.context || '');
     }
 
     // ── 设置弹窗 ──────────────────────────────────────────
