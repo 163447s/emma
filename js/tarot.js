@@ -512,6 +512,8 @@
         openReading: openReading,
         openReadingFromMessage: openReadingFromMessage,
         openConfig: openConfig,
-        getSettings: getSettings
+        getSettings: getSettings,
+        cards: CARDS,
+        toRoman: toRoman
     };
 })();
