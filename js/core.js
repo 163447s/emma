@@ -1776,61 +1776,7 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
             }
 
 
-            // ── MJ 塔罗：按概率发塔罗牌而非普通字卡 ──
-            if (window.Tarot && typeof window.Tarot.isEnabled === 'function'
-                && window.Tarot.isEnabled() && Math.random() < window.Tarot.getProbability()) {
-                showTypingIndicator();
-                const tarotDelayRange = settings.replyDelayMax - settings.replyDelayMin;
-                const tarotDelay = settings.replyDelayMin + Math.random() * tarotDelayRange;
-                setTimeout(() => {
-                    try {
-                        const card = window.Tarot.drawCard();
-                        const recentUserMsgsForTarot = settings.replyEnabled
-                            ? messages.filter(m => m.sender === 'user' && m.text).slice(-5)
-                            : [];
-                        const q = recentUserMsgsForTarot.length
-                            ? recentUserMsgsForTarot[recentUserMsgsForTarot.length - 1].text
-                            : '';
-                        addMessage({
-                            id: Date.now(),
-                            sender: settings.partnerName || '对方',
-                            text: '',
-                            timestamp: new Date(),
-                            status: 'received',
-                            favorited: false,
-                            note: null,
-                            type: 'tarot',
-                            tarot: {
-                                i: card.i,
-                                name: card.name,
-                                en: card.en,
-                                upright: !!card.upright,
-                                u: card.u || '',
-                                r: card.r || '',
-                                question: String(q || '').slice(0, 200)
-                            }
-                        });
-                        playSound('message');
-                        if (typeof window._sendPartnerNotification === 'function') {
-                            window._sendPartnerNotification(settings.partnerName || '对方', '🔮 ' + card.name + (card.upright ? '（正位）' : '（逆位）'));
-                        }
-                    } catch (e) {
-                        console.error('[simulateReply] 塔罗牌出错:', e);
-                    }
-                    (function(){
-                        try { if (window._typingIndicatorAutoHideTimer) { clearTimeout(window._typingIndicatorAutoHideTimer); window._typingIndicatorAutoHideTimer = null; } } catch (e2) {}
-                        var _tiW = document.getElementById('typing-indicator-wrapper');
-                        if (_tiW) {
-                            var _tiInner = _tiW.querySelector('.typing-indicator');
-                            if (_tiInner) {
-                                _tiInner.classList.add('hiding');
-                                setTimeout(function() { _tiW.style.display = 'none'; if (_tiInner) _tiInner.classList.remove('hiding'); }, 240);
-                            } else { _tiW.style.display = 'none'; }
-                        }
-                    })();
-                }, tarotDelay);
-                return;
-            }
+
 
             const replyCount = Math.random() < 0.75 ? 1: (Math.random() < 0.95 ? 2: 3);
             if (!customReplies || customReplies.length === 0) {
@@ -1867,6 +1813,62 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                 delay += settings.replyDelayMin + Math.random() * delayRange;
                 setTimeout(() => {
                     try {
+                    // ── 塔罗牌作为字卡池中的一种：抽到时发牌（点击牌面可结合上下文解读）──
+                    if (window.Tarot && typeof window.Tarot.isEnabled === 'function'
+                        && window.Tarot.isEnabled() && Math.random() < window.Tarot.getProbability()) {
+                        try {
+                            const card = window.Tarot.drawCard();
+                            const partnerName = settings.partnerName || '对方';
+                            const recentUserMsgsForTarot = messages.filter(m => m.sender === 'user' && m.text).slice(-8);
+                            const lastQ = recentUserMsgsForTarot.length
+                                ? recentUserMsgsForTarot[recentUserMsgsForTarot.length - 1].text
+                                : '';
+                            const ctxMsgs = messages.slice(-14)
+                                .filter(m => m.text && (m.sender === 'user' || m.sender === partnerName))
+                                .map(m => (m.sender === 'user' ? '我：' : 'MJ：') + m.text);
+                            const context = ctxMsgs.slice(-8).join('\n').slice(0, 600);
+                            addMessage({
+                                id: Date.now() + i,
+                                sender: partnerName,
+                                text: '',
+                                timestamp: new Date(),
+                                status: 'received',
+                                favorited: false,
+                                note: null,
+                                type: 'tarot',
+                                tarot: {
+                                    i: card.i,
+                                    name: card.name,
+                                    en: card.en,
+                                    upright: !!card.upright,
+                                    u: card.u || '',
+                                    r: card.r || '',
+                                    question: String(lastQ || '').slice(0, 200),
+                                    context: String(context || '').slice(0, 600)
+                                }
+                            });
+                            playSound('message');
+                            if (typeof window._sendPartnerNotification === 'function') {
+                                window._sendPartnerNotification(partnerName, '🔮 ' + card.name + (card.upright ? '（正位）' : '（逆位）'));
+                            }
+                        } catch (e) {
+                            console.error('[simulateReply] 塔罗牌出错:', e);
+                        }
+                        if (i === replyCount - 1) {
+                            (function() {
+                                try { if (window._typingIndicatorAutoHideTimer) { clearTimeout(window._typingIndicatorAutoHideTimer); window._typingIndicatorAutoHideTimer = null; } } catch (e) {}
+                                var _tiW = document.getElementById('typing-indicator-wrapper');
+                                if (_tiW) {
+                                    var _tiInner = _tiW.querySelector('.typing-indicator');
+                                    if (_tiInner) {
+                                        _tiInner.classList.add('hiding');
+                                        setTimeout(function() { _tiW.style.display = 'none'; if (_tiInner) _tiInner.classList.remove('hiding'); }, 240);
+                                    } else { _tiW.style.display = 'none'; }
+                                }
+                            })();
+                        }
+                        return;
+                    }
                     const replyPool = replyPoolOnce;
                     // 被屏蔽或无效项直接换下一个，尽量保证每次都产出可用回复
                     let replyText = '';
