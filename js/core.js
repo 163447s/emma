@@ -1793,10 +1793,19 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
             (window.customReplyGroups || []).forEach(g => {
                 if (g.disabled && Array.isArray(g.items)) g.items.forEach(item => disabledGroupItemsOnce.add(item));
             });
+            // 塔罗牌作为字卡池中的一种：启用时把 78 张塔罗牌一起放进池子（发出为牌面图案）
+            const tarotPoolOnce = [];
+            if (window.Tarot && typeof window.Tarot.isEnabled === 'function' && window.Tarot.isEnabled()
+                && window.Tarot.cards && window.Tarot.cards.length) {
+                window.Tarot.cards.forEach(function (c, idx) {
+                    tarotPoolOnce.push('__TAROT__' + String(c.i));
+                });
+            }
             const replyPoolOnce = customReplies
                 .filter(r => !disabledItemsOnce.has(r) && !disabledGroupItemsOnce.has(r))
                 .map(r => String(r || '').trim())
-                .filter(Boolean);
+                .filter(Boolean)
+                .concat(tarotPoolOnce);
             if (!replyPoolOnce.length) {
                 showNotification('回复库可用内容为空（可能被分组禁用或屏蔽），请到「自定义回复」中调整', 'info', 4000);
                 return;
@@ -1813,43 +1822,59 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                 delay += settings.replyDelayMin + Math.random() * delayRange;
                 setTimeout(() => {
                     try {
-                    // ── 塔罗牌作为字卡池中的一种：抽到时发牌（点击牌面可结合上下文解读）──
-                    if (window.Tarot && typeof window.Tarot.isEnabled === 'function'
-                        && window.Tarot.isEnabled() && Math.random() < window.Tarot.getProbability()) {
+                    const replyPool = replyPoolOnce;
+                    // 被屏蔽或无效项直接换下一个，尽量保证每次都产出可用回复
+                    let replyText = '';
+                    for (let t = 0; t < 6; t++) {
+                        const picked = replyPool[Math.floor(Math.random() * replyPool.length)];
+                        if (picked && String(picked).trim()) {
+                            replyText = String(picked).trim();
+                            break;
+                        }
+                    }
+                    if (!replyText && i === replyCount - 1) {
+                        (function(){try{if(window._typingIndicatorAutoHideTimer){clearTimeout(window._typingIndicatorAutoHideTimer);window._typingIndicatorAutoHideTimer=null;}}catch(e){}var _tiW=document.getElementById('typing-indicator-wrapper');if(_tiW){var _tiInner=_tiW.querySelector('.typing-indicator');if(_tiInner){_tiInner.classList.add('hiding');setTimeout(function(){_tiW.style.display='none';if(_tiInner)_tiInner.classList.remove('hiding');},240);}else{_tiW.style.display='none';}}})();
+                        return;
+                    }
+                    // 抽到塔罗牌（字卡池中的特殊条目）：发牌面图案，点击可结合上下文解读
+                    if (replyText && replyText.indexOf('__TAROT__') === 0) {
                         try {
-                            const card = window.Tarot.drawCard();
-                            const partnerName = settings.partnerName || '对方';
-                            const recentUserMsgsForTarot = messages.filter(m => m.sender === 'user' && m.text).slice(-8);
-                            const lastQ = recentUserMsgsForTarot.length
-                                ? recentUserMsgsForTarot[recentUserMsgsForTarot.length - 1].text
-                                : '';
-                            const ctxMsgs = messages.slice(-14)
-                                .filter(m => m.text && (m.sender === 'user' || m.sender === partnerName))
-                                .map(m => (m.sender === 'user' ? '我：' : 'MJ：') + m.text);
-                            const context = ctxMsgs.slice(-8).join('\n').slice(0, 600);
-                            addMessage({
-                                id: Date.now() + i,
-                                sender: partnerName,
-                                text: '',
-                                timestamp: new Date(),
-                                status: 'received',
-                                favorited: false,
-                                note: null,
-                                type: 'tarot',
-                                tarot: {
-                                    i: card.i,
-                                    name: card.name,
-                                    en: card.en,
-                                    upright: !!card.upright,
-                                    u: card.u || '',
-                                    r: card.r || '',
-                                    question: String(lastQ || '').slice(0, 200),
-                                    context: String(context || '').slice(0, 600)
+                            const tIdx = Number(replyText.slice(9));
+                            const card = (window.Tarot && window.Tarot.cards) ? window.Tarot.cards[tIdx] : null;
+                            if (card) {
+                                const partnerName = settings.partnerName || '对方';
+                                const recentUserMsgsForTarot = messages.filter(m => m.sender === 'user' && m.text).slice(-8);
+                                const lastQ = recentUserMsgsForTarot.length
+                                    ? recentUserMsgsForTarot[recentUserMsgsForTarot.length - 1].text
+                                    : '';
+                                const ctxMsgs = messages.slice(-14)
+                                    .filter(m => m.text && (m.sender === 'user' || m.sender === partnerName))
+                                    .map(m => (m.sender === 'user' ? '我：' : 'MJ：') + m.text);
+                                const context = ctxMsgs.slice(-8).join('\n').slice(0, 600);
+                                addMessage({
+                                    id: Date.now() + i,
+                                    sender: partnerName,
+                                    text: '',
+                                    timestamp: new Date(),
+                                    status: 'received',
+                                    favorited: false,
+                                    note: null,
+                                    type: 'tarot',
+                                    tarot: {
+                                        i: card.i,
+                                        name: card.name,
+                                        en: card.en,
+                                        upright: Math.random() >= 0.5,
+                                        u: card.u || '',
+                                        r: card.r || '',
+                                        question: String(lastQ || '').slice(0, 200),
+                                        context: String(context || '').slice(0, 600)
+                                    }
+                                });
+                                playSound('message');
+                                if (typeof window._sendPartnerNotification === 'function') {
+                                    window._sendPartnerNotification(partnerName, '🔮 ' + card.name + (card.upright ? '（正位）' : '（逆位）'));
                                 }
-                            });
-                            playSound('message');
-                            if (typeof window._sendPartnerNotification === 'function') {
-                                window._sendPartnerNotification(partnerName, '🔮 ' + card.name + (card.upright ? '（正位）' : '（逆位）'));
                             }
                         } catch (e) {
                             console.error('[simulateReply] 塔罗牌出错:', e);
@@ -1867,20 +1892,6 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                                 }
                             })();
                         }
-                        return;
-                    }
-                    const replyPool = replyPoolOnce;
-                    // 被屏蔽或无效项直接换下一个，尽量保证每次都产出可用回复
-                    let replyText = '';
-                    for (let t = 0; t < 6; t++) {
-                        const picked = replyPool[Math.floor(Math.random() * replyPool.length)];
-                        if (picked && String(picked).trim()) {
-                            replyText = String(picked).trim();
-                            break;
-                        }
-                    }
-                    if (!replyText && i === replyCount - 1) {
-                        (function(){try{if(window._typingIndicatorAutoHideTimer){clearTimeout(window._typingIndicatorAutoHideTimer);window._typingIndicatorAutoHideTimer=null;}}catch(e){}var _tiW=document.getElementById('typing-indicator-wrapper');if(_tiW){var _tiInner=_tiW.querySelector('.typing-indicator');if(_tiInner){_tiInner.classList.add('hiding');setTimeout(function(){_tiW.style.display='none';if(_tiInner)_tiInner.classList.remove('hiding');},240);}else{_tiW.style.display='none';}}})();
                         return;
                     }
 
