@@ -2535,7 +2535,6 @@ function _renderTarotGroupBlock(list) {
         const num = window.Tarot.toRoman ? window.Tarot.toRoman(Number(c.i)) : '';
         const name = esc(num ? num + '·' + c.name : c.name);
         return '<div class="tarot-lib-item">'
-            + '<span class="tl-num">' + (num ? esc(num) : '') + '</span>'
             + '<span class="tl-name">' + name + '</span>'
             + '<span class="tl-hint">' + suits(Number(c.i)) + '</span>'
             + '</div>';
