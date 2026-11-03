@@ -1,13 +1,13 @@
 /* ============================================================
  * MJ 塔罗模块
  * 功能：
- *   1. MJ 回复时按概率随机发塔罗牌（而非普通字卡）
+ *   1. MJ 回复时从字卡池中自然抽到塔罗牌（发出牌面图案）
  *   2. 塔罗牌消息以卡牌样式渲染，标注牌名与正逆位
  *   3. 点击卡牌弹出解读面板：
  *      - 牌面图片（images/tarot/00.png ~ 77.png，RWS 78 张）
  *      - AI 解读（DeepSeek，经 Cloudflare Worker 代理，密钥在服务端）
  *      - 未配置 Worker 时回退本地预设解读，保证可用
- *   4. 设置入口：设置 → 高级功能 → MJ 塔罗（开关 / 触发概率 / Worker 地址）
+ *   4. 设置入口：设置 → 高级功能 → MJ 塔罗（开关 / Worker 地址）
  * 依赖：无；建议在 core.js 之前加载（core.js 在运行时调用 window.Tarot）
  * ============================================================ */
 (function () {
@@ -139,19 +139,16 @@
         const o = lsGet(SETTINGS_KEY, null) || {};
         return {
             enabled: o.enabled !== false,                 // 默认开启
-            probability: Math.max(0, Math.min(1, Number(o.probability) || 0.1)), // 默认 10%
             workerUrl: String(o.workerUrl || '').trim()
         };
     }
     function saveSettings(s) {
         lsSet(SETTINGS_KEY, {
             enabled: !!s.enabled,
-            probability: Math.max(0, Math.min(1, Number(s.probability) || 0.1)),
             workerUrl: String(s.workerUrl || '').trim()
         });
     }
     function isEnabled() { return getSettings().enabled; }
-    function getProbability() { return getSettings().probability; }
 
     // ── 抽牌 ──────────────────────────────────────────────
     function drawCard() {
@@ -381,19 +378,14 @@
                     <i class="fas fa-wand-magic-sparkles"></i><span>MJ 塔罗</span>
                 </div>
                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;margin-bottom:14px;">
-                    MJ 在聊天回复中有概率发一张塔罗牌（替代普通字卡），点牌面弹出解读。
+                    MJ 塔罗牌已加入字卡池，回复时会自然抽到并发出牌面图案，点牌面弹出解读。
                     AI 解读通过 <b>DeepSeek</b> 生成，密钥放在你自己的 Cloudflare Worker 环境变量里，
                     不会出现在网站前端。<a href="worker-deepseek-proxy.js" style="color:var(--accent-color);" download>下载 Worker 代码</a>，
                     部署后在下方填入其网址即可。
                 </div>
                 <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:12px;cursor:pointer;">
-                    <input type="checkbox" id="tarot-enable" style="accent-color:var(--accent-color);width:15px;height:15px;"> 启用 MJ 随机塔罗牌
+                    <input type="checkbox" id="tarot-enable" style="accent-color:var(--accent-color);width:15px;height:15px;"> 启用 MJ 塔罗牌（加入字卡池）
                 </label>
-                <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">
-                    触发概率：<span id="tarot-prob-label" style="color:var(--accent-color);">10%</span>
-                </div>
-                <input type="range" id="tarot-prob" min="1" max="50" value="10" step="1"
-                       style="width:100%;accent-color:var(--accent-color);margin-bottom:14px;">
                 <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">解读服务地址（Cloudflare Worker URL）</div>
                 <input type="text" id="tarot-worker-url" class="modal-input" placeholder="https://xxx.你的用户名.workers.dev" autocomplete="off" style="margin-bottom:6px;">
                 <div id="tarot-config-status" style="font-size:11px;color:var(--text-secondary);margin:4px 0 10px;min-height:16px;"></div>
@@ -405,17 +397,12 @@
         document.body.appendChild(modal);
         _configModal = modal;
 
-        const prob = modal.querySelector('#tarot-prob');
-        const probLabel = modal.querySelector('#tarot-prob-label');
-        prob.addEventListener('input', function () { probLabel.textContent = prob.value + '%'; });
-
         modal.querySelector('#tarot-config-cancel').onclick = function () {
             if (typeof hideModal === 'function') hideModal(modal);
         };
         modal.querySelector('#tarot-config-save').onclick = function () {
             saveSettings({
                 enabled: modal.querySelector('#tarot-enable').checked,
-                probability: Number(prob.value) / 100,
                 workerUrl: modal.querySelector('#tarot-worker-url').value
             });
             const status = modal.querySelector('#tarot-config-status');
@@ -432,15 +419,12 @@
         const modal = buildConfigModal();
         const s = getSettings();
         modal.querySelector('#tarot-enable').checked = s.enabled;
-        const prob = modal.querySelector('#tarot-prob');
-        prob.value = Math.round(s.probability * 100);
-        modal.querySelector('#tarot-prob-label').textContent = Math.round(s.probability * 100) + '%';
         modal.querySelector('#tarot-worker-url').value = s.workerUrl;
         const status = modal.querySelector('#tarot-config-status');
         if (status) {
             status.style.color = 'var(--text-secondary)';
             status.textContent = s.enabled
-                ? '已启用，触发概率 ' + Math.round(s.probability * 100) + '%'
+                ? '已启用，塔罗牌已加入字卡池'
                 : '当前已关闭';
         }
         if (typeof showModal === 'function') showModal(modal); else modal.style.display = 'flex';
@@ -505,7 +489,6 @@
     // ── 对外导出（core.js 调用）────────────────────────
     window.Tarot = {
         isEnabled: isEnabled,
-        getProbability: getProbability,
         drawCard: drawCard,
         cardImageSrc: cardImageSrc,
         renderCardInner: renderCardInner,
