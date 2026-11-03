@@ -25,7 +25,6 @@ const CORE_ASSETS = [
   './js/features/group-chat.js',
   './js/features/call.js',
   './js/features/qa.js',
-  './js/features/product-push.js?v=20261102d',
   './js/games.js',
   './js/features.js',
   './js/data.js',
