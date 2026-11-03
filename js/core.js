@@ -1014,52 +1014,6 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
         return fragment;
     }
 
-    // ── 商品卡片消息：小红书风格卡片，点击跳购买 ──
-    if (msg.type === 'product') {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'message-wrapper received';
-        wrapper.dataset.id = msg.id;
-        wrapper.dataset.msgId = msg.id;
-
-        const avatarDiv = document.createElement('div');
-        avatarDiv.className = 'message-avatar';
-        if (settings.inChatAvatarEnabled) {
-            const avatarElement = DOMElements.partner.avatar;
-            avatarDiv.innerHTML = avatarElement.innerHTML;
-            if (typeof applyAvatarFrame === 'function') applyAvatarFrame(avatarDiv, settings.partnerAvatarFrame);
-            ['circle', 'square', 'pentagon', 'heart'].forEach(s => avatarDiv.classList.remove('shape-' + s));
-            const avatarShape = settings.partnerAvatarShape || 'circle';
-            if (avatarShape !== 'none') avatarDiv.classList.add('shape-' + avatarShape);
-        } else {
-            avatarDiv.style.display = 'none';
-        }
-        wrapper.appendChild(avatarDiv);
-
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'message-content-wrapper';
-
-        const cardBox = document.createElement('div');
-        cardBox.className = 'product-card-msg';
-        cardBox.title = '点击查看商品';
-        cardBox.innerHTML = (window.ProductPush && typeof window.ProductPush.renderCardInner === 'function')
-            ? window.ProductPush.renderCardInner(msg.product)
-            : '';
-
-        let productActionsHTML = '';
-        if (settings.replyEnabled) productActionsHTML += `<button class="meta-action-btn reply-btn" title="回复"><i class="fas fa-reply"></i></button>`;
-        const productStarIcon = msg.favorited ? 'fas fa-star' : 'far fa-star';
-        productActionsHTML += `<button class="meta-action-btn favorite-action-btn ${msg.favorited ? 'favorited' : ''}" title="${msg.favorited ? '取消收藏' : '收藏'}"><i class="${productStarIcon}"></i></button>`;
-        productActionsHTML += `<button class="meta-action-btn delete-btn" title="删除"><i class="fas fa-trash-alt"></i></button>`;
-        const productActionsDiv = document.createElement('div');
-        productActionsDiv.className = 'message-meta-actions';
-        productActionsDiv.innerHTML = productActionsHTML;
-
-        contentWrapper.append(cardBox, productActionsDiv);
-        wrapper.appendChild(contentWrapper);
-        fragment.appendChild(wrapper);
-        lastSenderRef.current = msg.sender;
-        return fragment;
-    }
 
     let showTimestamp = true;
     if (settings.timeFormat === 'off') {
@@ -1821,35 +1775,6 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                 return;
             }
 
-            // ── MJ 商品推送：按概率 + 频率控制推送好物 ──
-            if (window.ProductPush && typeof window.ProductPush.isEnabled === 'function'
-                && window.ProductPush.isEnabled() && window.ProductPush.shouldPush()
-                && Math.random() < window.ProductPush.getProbability()) {
-                showTypingIndicator();
-                const productDelayRange = settings.replyDelayMax - settings.replyDelayMin;
-                const productDelay = settings.replyDelayMin + Math.random() * productDelayRange;
-                setTimeout(() => {
-                    try {
-                        if (window.ProductPush && typeof window.ProductPush.pushProduct === 'function') {
-                            window.ProductPush.pushProduct();
-                        }
-                    } catch (e) {
-                        console.error('[simulateReply] 商品推送出错:', e);
-                    }
-                    (function(){
-                        try { if (window._typingIndicatorAutoHideTimer) { clearTimeout(window._typingIndicatorAutoHideTimer); window._typingIndicatorAutoHideTimer = null; } } catch (e2) {}
-                        var _tiW = document.getElementById('typing-indicator-wrapper');
-                        if (_tiW) {
-                            var _tiInner = _tiW.querySelector('.typing-indicator');
-                            if (_tiInner) {
-                                _tiInner.classList.add('hiding');
-                                setTimeout(function() { _tiW.style.display = 'none'; if (_tiInner) _tiInner.classList.remove('hiding'); }, 240);
-                            } else { _tiW.style.display = 'none'; }
-                        }
-                    })();
-                }, productDelay);
-                return;
-            }
 
             // ── MJ 塔罗：按概率发塔罗牌而非普通字卡 ──
             if (window.Tarot && typeof window.Tarot.isEnabled === 'function'
