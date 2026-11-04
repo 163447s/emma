@@ -1140,6 +1140,25 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
             tBtn.onclick = function () { window._toggleMsgTranslation(this); };
             messageDiv.appendChild(tBtn);
         }
+
+        // ── 打字消息（梦角日语键盘随机假名）：自动尝试翻译为中文，翻译不成就提示"乱码翻译不成" ──
+        if (msg.typing === true && msg.sender !== 'user') {
+            const tyDiv = document.createElement('div');
+            tyDiv.className = 'msg-typing-translate';
+            tyDiv.style.cssText = 'font-size:11px;color:var(--text-secondary);margin-top:2px;opacity:.85;';
+            tyDiv.textContent = '翻译中…';
+            messageDiv.appendChild(tyDiv);
+            if (window.Translation && typeof window.Translation.translateText === 'function') {
+                const _tyText = String(msg.text);
+                window.Translation.translateText(_tyText, 'zh').then(function (t) {
+                    if (!messageDiv.isConnected) return;
+                    const zhT = (t && String(t).trim() && String(t).trim() !== _tyText) ? String(t).trim() : null;
+                    tyDiv.textContent = zhT ? '译：' + zhT : '（乱码翻译不成）';
+                });
+            } else {
+                tyDiv.textContent = '（乱码翻译不成）';
+            }
+        }
     }
 
     let actionsHTML = '';
@@ -1798,6 +1817,7 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                             id: Date.now(),
                             sender: partnerName,
                             text: typingText,
+                            typing: true,
                             timestamp: new Date(),
                             status: 'received',
                             favorited: false,
