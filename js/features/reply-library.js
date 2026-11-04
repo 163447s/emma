@@ -2550,7 +2550,7 @@ function _renderTarotGroupBlock(list) {
             <div class="grp-chevron" style="color:var(--text-secondary);transition:transform 0.2s;">${ICONS.chevronD}</div>
         </div>
         <div class="rl-group-body tarot-lib-body">
-            <div class="tarot-lib-tip">梦角发字卡时，每条字卡都有概率被替换成一张塔罗牌发给你（聊天里显示牌面图）；点聊天里的牌面，可以结合你们最近的对话解读「他想对你说什么」。</div>
+            <div class="tarot-lib-tip">梦角发字卡时，每条字卡都有概率被替换成一张塔罗牌发给你（聊天里显示文字版牌名）；点聊天里的牌名，可以结合你们最近的对话解读「他想对你说什么」，并查看牌面。</div>
             <div class="tarot-lib-list">${items}</div>
         </div>
     `;
