@@ -90,8 +90,8 @@
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
             '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
             '    日本人日常输入法：每个行键默认打 あ・か・さ…，向上下左右滑动选 い・う・え・お（上い・左う・右え・下お）；' +
-            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；小写用 * 键；促音 っ・長音 ー・撥音 ん 在特殊键（わ行上滑也能出 ん）；' +
-            '    や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
+            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；促音 っ 在小写 * 键、撥音 ん 在わ行上滑、' +
+            '    長音 ー 在空白键（空格/ー 轮流）；や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
             '  </div>' +
             '  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;">' +
             '    <span style="font-size:12px;color:var(--text-secondary);">试打预览：</span>' +
@@ -175,14 +175,16 @@
         if (!grid) return;
         var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;margin:0 auto;">';
         grid.forEach(function (key) {
-            if (key.type === 'small' || key.type === 'special') {
-                // 小写 * 键 / 特殊键（っーん）：点击轮流追加
-                var cls = key.type === 'small' ? 'small' : 'special';
+            if (key.type === 'small' || key.type === 'space') {
+                // 小写 * 键 / 空白键（传统第12键，空格/長音ー 轮流）：点击轮流追加
+                var cls = key.type === 'small' ? 'small' : 'space';
+                var big = key.type === 'small' ? '小写 *' : '空白';
+                var sub = key.type === 'small' ? '小写假名轮流' : '空格 / 長音 ー';
                 html += '<div class="typing-kb-extra typing-kb-' + cls + '" data-kana="' + key.kana + '" data-idx="0" style="' +
                     'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
                     'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;cursor:pointer;transition:all .15s;user-select:none;">' +
-                    '<span style="font-size:15px;font-weight:700;color:var(--text-primary);">' + (key.type === 'small' ? '小写 *' : 'っーん') + '</span>' +
-                    '<span style="font-size:10px;color:var(--text-secondary);">点击轮流输入</span>' +
+                    '<span style="font-size:15px;font-weight:700;color:var(--text-primary);">' + big + '</span>' +
+                    '<span style="font-size:10px;color:var(--text-secondary);">' + sub + '</span>' +
                     '</div>';
             } else {
                 // 行键：中央 a 段大字 + 四角 i/u/e/o 小字（上い・左う・右え・下お），连点切换清音/浊音/半浊音；
