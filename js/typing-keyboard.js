@@ -23,7 +23,7 @@
         { label: 'な', a: 'な', i: 'に', u: 'ぬ', e: 'ね', o: 'の', dakuon: '', handakuon: '' },
         { label: 'は', a: 'は', i: 'ひ', u: 'ふ', e: 'へ', o: 'ほ', dakuon: 'ばびぶべぼ', handakuon: 'ぱぴぷぺぽ' },
         { label: 'ま', a: 'ま', i: 'み', u: 'む', e: 'め', o: 'も', dakuon: '', handakuon: '' },
-        { label: 'や', a: 'や', i: '', u: 'ゆ', e: '', o: 'よ', dakuon: '', handakuon: '' },
+        { label: 'や', a: 'や', i: '', u: 'ゆ', e: '', o: 'よ', small: 'ゃゅょ', dakuon: '', handakuon: '' },
         { label: 'ら', a: 'ら', i: 'り', u: 'る', e: 'れ', o: 'ろ', dakuon: '', handakuon: '' },
         { label: 'わ', a: 'わ', i: '', u: '', e: '', o: 'を', dakuon: '', handakuon: '' },
         { type: 'small', label: '小写 *', kana: 'っゃゅょぁぃぅぇぉ' },
