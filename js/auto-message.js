@@ -11,7 +11,7 @@
     var ENABLED_KEY = 'typingEnabled';
     var HISTORY_KEY = 'typingHistory';
     var HISTORY_MAX = 100;
-    var CHANCE = 0.2; // 与字卡并列发送时的打字占比（固定，不暴露配置）
+    var CHANCE = 0.1; // 与原机制随机风格一致：拍一拍 3%、表情/emoji 20% 均为系统随机项；打字乱码为"梦角不在线"的偶发体验（文档：有时候是混乱的），取 10%
 
     // ── 开关 / 历史记录 ──
     function isEnabled() {
