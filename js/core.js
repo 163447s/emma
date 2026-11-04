@@ -1234,6 +1234,42 @@ window._toggleMsgTranslation = function (btn) {
     if (!el) return;
     const zh = el.dataset.zh;
     if (zh === undefined || zh === null) return;
+    // ── 对方（梦角）消息：日语原文 → 点击翻译成中文；翻译不成提示乱码 ──
+    if (messageDiv.classList.contains('message-received') && /[\u3040-\u30ff]/.test(zh)) {
+        if (el.dataset.showing === 'zhCn') {
+            // 已显示中文译文 → 切回日语原文
+            el.innerHTML = String(zh).replace(/\n/g, '<br>');
+            el.dataset.showing = 'zh';
+            btn.textContent = '翻译';
+            return;
+        }
+        if (!window.Translation || typeof window.Translation.translateText !== 'function') return;
+        btn.textContent = '翻译中...';
+        btn.disabled = true;
+        window.Translation.translateText(zh, 'zh').then(function (t) {
+            btn.textContent = '翻译';
+            btn.disabled = false;
+            if (!document.body.contains(el)) return;
+            const cn = (t && String(t).trim() && String(t).trim() !== zh) ? String(t).trim() : null;
+            if (cn) {
+                el.dataset.zhCn = cn;
+                el.innerHTML = cn.replace(/\n/g, '<br>');
+                el.dataset.showing = 'zhCn';
+                btn.textContent = '原文';
+            } else {
+                // 翻译不成（乱码）→ 按钮短暂提示
+                btn.textContent = '乱码翻译不成';
+                el.dataset.showing = 'zh';
+                setTimeout(function () {
+                    if (document.body.contains(btn)) btn.textContent = '翻译';
+                }, 2200);
+            }
+        }).catch(function () {
+            btn.textContent = '翻译';
+            btn.disabled = false;
+        });
+        return;
+    }
     if (el.dataset.showing === 'ja') {
         // 已显示日语 → 切回中文原文
         el.innerHTML = String(zh).replace(/\n/g, '<br>');
