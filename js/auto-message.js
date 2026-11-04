@@ -90,7 +90,7 @@
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
             '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
             '    日本人日常输入法：每个行键默认打 あ・か・さ…，向上下左右滑动选 い・う・え・お（上い・左う・右え・下お）；' +
-            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；小写用 * 键；促音 っ・長音 ー・撥音 ん 在特殊键；' +
+            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；小写用 * 键；促音 っ・長音 ー・撥音 ん 在特殊键（わ行上滑也能出 ん）；' +
             '    や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
             '  </div>' +
             '  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;">' +
