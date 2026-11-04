@@ -1778,6 +1778,45 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
 
 
 
+            // ── 打字功能：与字卡池并列的发送方式（触发机制完全沿用现有 simulateReply / autoSendTimer）──
+            if (window.AutoMessage && typeof window.AutoMessage.isEnabled === 'function'
+                && window.AutoMessage.isEnabled()
+                && window.TypingKeyboard && typeof window.TypingKeyboard.generateTypingMessage === 'function'
+                && Math.random() < (typeof window.AutoMessage.getChance === 'function' ? window.AutoMessage.getChance() : 0.2)) {
+                const typingText = window.TypingKeyboard.generateTypingMessage();
+                if (typingText) {
+                    // 显示"正在输入（入力中…/考えてる…）"，持续 1~3 秒后整条消息一次性出现在对话流
+                    showTypingIndicator();
+                    const _tiLabel = document.getElementById('typing-indicator-label');
+                    if (_tiLabel) _tiLabel.textContent = Math.random() < 0.5 ? '入力中…' : '考えてる…';
+                    const typingDelay = 1000 + Math.random() * 2000;
+                    setTimeout(() => {
+                        // 隐藏输入中状态（复用现有隐藏逻辑）
+                        (function(){try{if(window._typingIndicatorAutoHideTimer){clearTimeout(window._typingIndicatorAutoHideTimer);window._typingIndicatorAutoHideTimer=null;}}catch(e){}var _tiW=document.getElementById('typing-indicator-wrapper');if(_tiW){var _tiInner=_tiW.querySelector('.typing-indicator');if(_tiInner){_tiInner.classList.add('hiding');setTimeout(function(){_tiW.style.display='none';if(_tiInner)_tiInner.classList.remove('hiding');},240);}else{_tiW.style.display='none';}}})();
+                        const partnerName = settings.partnerName || '对方';
+                        addMessage({
+                            id: Date.now(),
+                            sender: partnerName,
+                            text: typingText,
+                            timestamp: new Date(),
+                            status: 'received',
+                            favorited: false,
+                            note: null,
+                            replyTo: null,
+                            type: 'normal'
+                        });
+                        playSound('message');
+                        // 历史发送记录：只记录，MJ 不从历史里选消息发送
+                        try { window.AutoMessage.record(typingText); } catch (e) {}
+                        // 对方消息通知（与字卡回复一致）
+                        if (typeof window._sendPartnerNotification === 'function') {
+                            window._sendPartnerNotification(partnerName, '⌨️ ' + typingText);
+                        }
+                    }, typingDelay);
+                    return;
+                }
+            }
+
             const replyCount = Math.random() < 0.75 ? 1: (Math.random() < 0.95 ? 2: 3);
             const disabledItemsOnce = (() => {
                 try {
