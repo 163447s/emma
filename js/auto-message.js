@@ -227,11 +227,21 @@
         var modal = document.getElementById('typing-modal');
         if (!modal) return;
         renderHistory();
-        modal.style.display = 'flex';
+        // 与全站其他弹窗一致：使用官方 showModal（会播放 modal-content 透明度/位移动画）
+        if (typeof window.showModal === 'function') {
+            window.showModal(modal);
+        } else {
+            modal.style.display = 'flex';
+        }
     }
     function hideTypingModal() {
         var modal = document.getElementById('typing-modal');
-        if (modal) modal.style.display = 'none';
+        if (!modal) return;
+        if (typeof window.hideModal === 'function') {
+            window.hideModal(modal);
+        } else {
+            modal.style.display = 'none';
+        }
     }
 
     // 入口随页面就绪挂载
