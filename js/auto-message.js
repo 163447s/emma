@@ -90,7 +90,8 @@
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
             '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
             '    日本人日常输入法：每个行键默认打 あ・か・さ…，向上下左右滑动选 い・う・え・お（上い・左う・右え・下お）；' +
-            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；小写用 * 键；促音 っ・長音 ー・撥音 ん 在特殊键。' +
+            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；小写用 * 键；促音 っ・長音 ー・撥音 ん 在特殊键；' +
+            '    や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
             '  </div>' +
             '  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;">' +
             '    <span style="font-size:12px;color:var(--text-secondary);">试打预览：</span>' +
@@ -184,12 +185,15 @@
                     '<span style="font-size:10px;color:var(--text-secondary);">点击轮流输入</span>' +
                     '</div>';
             } else {
-                // 行键：中央 a 段大字 + 四角 i/u/e/o 小字（上い・左う・右え・下お），连点切换清音/浊音/半浊音
+                // 行键：中央 a 段大字 + 四角 i/u/e/o 小字（上い・左う・右え・下お），连点切换清音/浊音/半浊音；
+                // や行左角为小写 ゃゅょ（data-seg=small，点击轮流输入，拗音用）
+                var leftSeg = key.small ? 'small' : 'u';
+                var leftLabel = key.small || key.u;
                 html += '<div class="typing-kb-key" data-mode="0" data-dakuon="' + key.dakuon + '" data-handakuon="' + key.handakuon + '" style="' +
                     'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
                     'display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;user-select:none;">' +
                     '<span class="typing-kb-seg" data-seg="i" style="position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.i || '') + '</span>' +
-                    '<span class="typing-kb-seg" data-seg="u" style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.u || '') + '</span>' +
+                    '<span class="typing-kb-seg" data-seg="' + leftSeg + '" data-cycle="' + (key.small || '') + '" data-idx="0" style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:11px;color:' + (key.small ? 'var(--warning-color,#e6a23c)' : 'var(--text-secondary)') + ';cursor:pointer;">' + leftLabel + '</span>' +
                     '<span class="typing-kb-seg" data-seg="e" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.e || '') + '</span>' +
                     '<span class="typing-kb-seg" data-seg="o" style="position:absolute;bottom:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.o || '') + '</span>' +
                     '<span class="typing-kb-center" data-seg="a" data-a0="' + key.a + '" style="font-size:22px;font-weight:700;color:var(--accent-color);cursor:pointer;">' + key.a + '</span>' +
@@ -235,11 +239,18 @@
                 else next.textContent = a0;
                 el.setAttribute('data-mode', mode);
             });
-            // 四角：追加对应段假名（保持当前 mode 的清音段）
+            // 四角：追加对应段假名（保持当前 mode 的清音段）；小写段（や行左角 ゃゅょ）点击轮流
             el.querySelectorAll('.typing-kb-seg').forEach(function (s) {
                 s.addEventListener('click', function (ev) {
                     ev.stopPropagation();
-                    appendKana(segKana(s.getAttribute('data-seg')));
+                    var cycle = s.getAttribute('data-cycle') || '';
+                    if (cycle) {
+                        var idx = parseInt(s.getAttribute('data-idx') || '0', 10);
+                        appendKana(cycle.charAt(idx % cycle.length));
+                        s.setAttribute('data-idx', String((idx + 1) % cycle.length));
+                    } else {
+                        appendKana(segKana(s.getAttribute('data-seg')));
+                    }
                 });
             });
         });
