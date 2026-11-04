@@ -70,7 +70,7 @@
         for (var i = 0; i < WORD_SET.length; i++) {
             var w = WORD_SET[i];
             var dist = levenshtein(s, w);
-            if (dist <= d && (s.length >= 3 || dist === 1)) {
+            if (dist <= d && dist > 0 && (s.length >= 3 || dist === 1)) {
                 if (!best || dist < best.dist) best = { dist: dist, w: w };
             }
         }
