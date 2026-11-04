@@ -225,11 +225,11 @@
             // 拖拽方向 → 段假名（左拖且该键有小写段=や行，则轮流输入 ゃゅょ）
             function dirKana(dir) {
                 var smallEl = el.querySelector('.typing-kb-seg[data-cycle]');
-                if (dir === 'u' && smallEl) {
-                    var cycle = smallEl.getAttribute('data-cycle') || '';
+                var smallCycle = smallEl ? (smallEl.getAttribute('data-cycle') || '') : '';
+                if (dir === 'u' && smallCycle) {
                     var idx = parseInt(smallEl.getAttribute('data-idx') || '0', 10);
-                    smallEl.setAttribute('data-idx', String((idx + 1) % cycle.length));
-                    return cycle.charAt(idx % cycle.length);
+                    smallEl.setAttribute('data-idx', String((idx + 1) % smallCycle.length));
+                    return smallCycle.charAt(idx % smallCycle.length);
                 }
                 return segKana(dir);
             }
@@ -262,6 +262,8 @@
                 pointerState = null;
                 if (dir) {
                     _suppress = true;
+                    // 拖拽后浏览器会派发一次 click，短暂抑制避免重复输入；之后自动恢复
+                    setTimeout(function () { _suppress = false; }, 80);
                     appendKana(dirKana(dir));
                 }
             });
