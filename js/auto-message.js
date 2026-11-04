@@ -206,10 +206,12 @@
         html += '</div>';
         box.innerHTML = html;
 
-        // 行键交互：连点中央切换 清音→浊音→半浊音；点四角直接输入对应段假名
+        // 行键交互：连点中央切换 清音→浊音→半浊音；点四角直接输入对应段假名；
+        // 拖拽滑动（flick）：按住往 上/左/右/下 拖再松开 → 选 i/u/e/o 段（や行向左拖出小写 ゃゅょ）
         box.querySelectorAll('.typing-kb-key').forEach(function (el) {
             var dakuon = el.getAttribute('data-dakuon') || '';
             var handakuon = el.getAttribute('data-handakuon') || '';
+            var _suppress = false; // 拖拽结束后抑制本次 click，避免重复输入
             // 取当前 mode 对应的段假名
             var SEG_IDX = { a: 0, i: 1, u: 2, e: 3, o: 4 };
             function segKana(seg) {
@@ -220,6 +222,17 @@
                 if (seg === 'a') return el.querySelector('.typing-kb-center').textContent;
                 return el.querySelector('.typing-kb-seg[data-seg="' + seg + '"]').textContent;
             }
+            // 拖拽方向 → 段假名（左拖且该键有小写段=や行，则轮流输入 ゃゅょ）
+            function dirKana(dir) {
+                var smallEl = el.querySelector('.typing-kb-seg[data-cycle]');
+                if (dir === 'u' && smallEl) {
+                    var cycle = smallEl.getAttribute('data-cycle') || '';
+                    var idx = parseInt(smallEl.getAttribute('data-idx') || '0', 10);
+                    smallEl.setAttribute('data-idx', String((idx + 1) % cycle.length));
+                    return cycle.charAt(idx % cycle.length);
+                }
+                return segKana(dir);
+            }
             function appendKana(ch) {
                 if (!ch) return;
                 var prev = document.getElementById('typing-preview');
@@ -227,9 +240,35 @@
                 if (!cur || cur.indexOf('（点击') >= 0) cur = '';
                 prev.textContent = cur + ch;
             }
+            // 拖拽滑动（Pointer Events 覆盖鼠标与触摸）
+            var pointerState = null;
+            el.addEventListener('pointerdown', function (ev) {
+                pointerState = { x: ev.clientX, y: ev.clientY, dir: null };
+                try { el.setPointerCapture(ev.pointerId); } catch (e) {}
+            });
+            el.addEventListener('pointermove', function (ev) {
+                if (!pointerState) return;
+                var dx = ev.clientX - pointerState.x;
+                var dy = ev.clientY - pointerState.y;
+                if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+                    pointerState.dir = Math.abs(dx) > Math.abs(dy)
+                        ? (dx < 0 ? 'u' : 'e')
+                        : (dy < 0 ? 'i' : 'o');
+                }
+            });
+            el.addEventListener('pointerup', function (ev) {
+                if (!pointerState) return;
+                var dir = pointerState.dir;
+                pointerState = null;
+                if (dir) {
+                    _suppress = true;
+                    appendKana(dirKana(dir));
+                }
+            });
             // 中央：追加当前段 + 切换 mode（清→浊→半→清）
             el.querySelector('.typing-kb-center').addEventListener('click', function (ev) {
                 ev.stopPropagation();
+                if (_suppress) { _suppress = false; return; }
                 var mode = parseInt(el.getAttribute('data-mode') || '0', 10);
                 appendKana(segKana('a'));
                 mode = (mode + 1) % 3;
@@ -245,6 +284,7 @@
             el.querySelectorAll('.typing-kb-seg').forEach(function (s) {
                 s.addEventListener('click', function (ev) {
                     ev.stopPropagation();
+                    if (_suppress) { _suppress = false; return; }
                     var cycle = s.getAttribute('data-cycle') || '';
                     if (cycle) {
                         var idx = parseInt(s.getAttribute('data-idx') || '0', 10);
