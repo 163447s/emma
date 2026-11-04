@@ -44,11 +44,11 @@
                 if (ch !== rule.char) continue;
                 var before = k.slice(0, i);
                 var after = k.slice(i + 1);
-                // 句首的 わ/え/お 多为语气（わっ/えっ/おっ），不提示
-                var isMid = before.length > 0 && after.length > 0;
+                // 句首的 わ/え/お 多为语气（わっ/えっ/おっ），不提示；句尾的 わ（如 こんにちは 的 は）也要提示
+                var notAtStart = before.length > 0;
                 var prev = before.charAt(before.length - 1);
                 var prevIsParticle = 'はをにがでとへも'.indexOf(prev) >= 0;
-                if (isMid && !prevIsParticle) {
+                if (notAtStart && !prevIsParticle) {
                     var idx = t.indexOf(ch, Math.max(0, i - 2));
                     return { index: idx, from: ch, to: rule.to, msg: rule.msg };
                 }
