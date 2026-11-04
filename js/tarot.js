@@ -378,7 +378,7 @@
                     <i class="fas fa-wand-magic-sparkles"></i><span>MJ 塔罗</span>
                 </div>
                 <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;margin-bottom:14px;">
-                    MJ 塔罗牌已加入字卡池，回复时会自然抽到并发出牌面图案，点牌面弹出解读。
+                    MJ 塔罗牌已加入字卡池，回复时会自然抽到并以文字版牌名发出，点牌名弹出牌面与解读。
                     AI 解读通过 <b>DeepSeek</b> 生成，密钥放在你自己的 Cloudflare Worker 环境变量里，
                     不会出现在网站前端。<a href="worker-deepseek-proxy.js" style="color:var(--accent-color);" download>下载 Worker 代码</a>，
                     部署后在下方填入其网址即可。
@@ -467,6 +467,25 @@
             .tarot-card-msg .tarot-card-hint i { margin-right: 3px; }
             /* 逆位：卡片底部向下，加个旋转提示 */
             .tarot-card-msg.reversed .tarot-card-art img { transform: rotate(180deg); }
+            /* 文字版塔罗牌消息气泡（点击弹出牌面与解读） */
+            .tarot-text-msg {
+                max-width: 250px; border-radius: 14px; cursor: pointer;
+                background: linear-gradient(150deg, #2b2350 0%, #1a1730 60%, #241d3e 100%);
+                border: 1px solid rgba(255,255,255,0.10); box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+                padding: 10px 14px; transition: transform 0.16s, box-shadow 0.16s; user-select: none;
+            }
+            .tarot-text-msg:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(0,0,0,0.34); }
+            .tarot-text-inner { display: flex; flex-direction: column; gap: 4px; }
+            .tarot-text-top { display: flex; align-items: center; gap: 6px; }
+            .tarot-text-top i { color: #ffd68c; font-size: 12px; }
+            .tarot-text-name { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 0.5px; line-height: 1.4; }
+            .tarot-text-pos {
+                align-self: flex-start; font-size: 10px; font-weight: 600; padding: 1.5px 8px; border-radius: 10px; line-height: 1.6;
+            }
+            .tarot-text-pos.pos-up { background: rgba(255,214,140,0.18); color: #ffd68c; }
+            .tarot-text-pos.pos-rev { background: rgba(150,150,170,0.20); color: #a9a9c4; }
+            .tarot-text-hint { font-size: 10px; color: rgba(255,255,255,0.45); line-height: 1.4; }
+            .tarot-text-hint i { margin-right: 3px; }
         `;
         document.head.appendChild(style);
     }
