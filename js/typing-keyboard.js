@@ -27,7 +27,7 @@
         { label: 'ら', a: 'ら', i: 'り', u: 'る', e: 'れ', o: 'ろ', dakuon: '', handakuon: '' },
         { label: 'わ', a: 'わ', i: 'ん', u: '', e: '', o: 'を', dakuon: '', handakuon: '' },
         { type: 'small', label: '小写 *', kana: 'っゃゅょぁぃぅぇぉ' },
-        { type: 'special', label: 'っ・ー・ん', kana: 'っーん' }
+        { type: 'space', label: '空白', kana: ' ー' }
     ];
 
     var PUNCT = ['…', '！', '？'];
