@@ -86,11 +86,15 @@
             '  </div>' +
             '</div>' +
             '<div class="settings-section">' +
-            '  <div class="settings-section-title"><i class="fas fa-keyboard"></i>标准日语键盘 · 五十音</div>' +
+            '  <div class="settings-section-title"><i class="fas fa-keyboard"></i>12键九宫格假名键盘 · flick</div>' +
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
+            '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
+            '    日本人日常输入法：每个行键默认打 あ・か・さ…，向上下左右滑动选 い・う・え・お（上い・左う・右え・下お）；' +
+            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；小写用 * 键；促音 っ・長音 ー・撥音 ん 在特殊键。' +
+            '  </div>' +
             '  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;">' +
             '    <span style="font-size:12px;color:var(--text-secondary);">试打预览：</span>' +
-            '    <span id="typing-preview" style="font-size:16px;font-weight:700;color:var(--accent-color);min-height:22px;">（点击上方假名拼一串）</span>' +
+            '    <span id="typing-preview" style="font-size:16px;font-weight:700;color:var(--accent-color);min-height:22px;">（点击上方按键拼一串）</span>' +
             '    <button id="typing-random-btn" style="margin-left:auto;border:none;background:var(--accent-color);color:#fff;font-size:12px;font-weight:700;padding:4px 14px;border-radius:10px;cursor:pointer;">随机生成一条</button>' +
             '  </div>' +
             '</div>' +
@@ -166,26 +170,91 @@
     function renderKeyboard() {
         var box = document.getElementById('typing-keyboard-view');
         if (!box) return;
-        var html = '';
-        window.TypingKeyboard.keyboardRows.forEach(function (row) {
-            html += '<div style="display:flex;align-items:center;margin-bottom:6px;flex-wrap:wrap;">' +
-                '<span style="width:56px;font-size:11px;color:var(--text-secondary);flex-shrink:0;">' + row.label + '</span>';
-            for (var i = 0; i < row.kana.length; i++) {
-                var ch = row.kana[i];
-                html += '<span data-kana="' + ch + '" style="' +
-                    'display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;' +
-                    'margin:2px;border-radius:8px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
-                    'font-size:14px;cursor:pointer;transition:all .15s;user-select:none;">' + ch + '</span>';
+        var grid = window.TypingKeyboard.keyboardGrid;
+        if (!grid) return;
+        var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;margin:0 auto;">';
+        grid.forEach(function (key) {
+            if (key.type === 'small' || key.type === 'special') {
+                // 小写 * 键 / 特殊键（っーん）：点击轮流追加
+                var cls = key.type === 'small' ? 'small' : 'special';
+                html += '<div class="typing-kb-extra typing-kb-' + cls + '" data-kana="' + key.kana + '" data-idx="0" style="' +
+                    'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
+                    'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;cursor:pointer;transition:all .15s;user-select:none;">' +
+                    '<span style="font-size:15px;font-weight:700;color:var(--text-primary);">' + (key.type === 'small' ? '小写 *' : 'っーん') + '</span>' +
+                    '<span style="font-size:10px;color:var(--text-secondary);">点击轮流输入</span>' +
+                    '</div>';
+            } else {
+                // 行键：中央 a 段大字 + 四角 i/u/e/o 小字（上い・左う・右え・下お），连点切换清音/浊音/半浊音
+                html += '<div class="typing-kb-key" data-mode="0" data-dakuon="' + key.dakuon + '" data-handakuon="' + key.handakuon + '" style="' +
+                    'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
+                    'display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;user-select:none;">' +
+                    '<span class="typing-kb-seg" data-seg="i" style="position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.i || '') + '</span>' +
+                    '<span class="typing-kb-seg" data-seg="u" style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.u || '') + '</span>' +
+                    '<span class="typing-kb-seg" data-seg="e" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.e || '') + '</span>' +
+                    '<span class="typing-kb-seg" data-seg="o" style="position:absolute;bottom:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.o || '') + '</span>' +
+                    '<span class="typing-kb-center" data-seg="a" data-a0="' + key.a + '" style="font-size:22px;font-weight:700;color:var(--accent-color);cursor:pointer;">' + key.a + '</span>' +
+                    '<span class="typing-kb-mode-tip" style="position:absolute;bottom:3px;right:6px;font-size:9px;color:var(--text-secondary);opacity:.7;">' + (key.dakuon ? '゛' : '') + (key.handakuon ? '゜' : '') + '</span>' +
+                    '</div>';
             }
-            html += '</div>';
         });
+        html += '</div>';
         box.innerHTML = html;
-        box.querySelectorAll('[data-kana]').forEach(function (el) {
-            el.addEventListener('click', function () {
+
+        // 行键交互：连点中央切换 清音→浊音→半浊音；点四角直接输入对应段假名
+        box.querySelectorAll('.typing-kb-key').forEach(function (el) {
+            var dakuon = el.getAttribute('data-dakuon') || '';
+            var handakuon = el.getAttribute('data-handakuon') || '';
+            // 取当前 mode 对应的段假名
+            var SEG_IDX = { a: 0, i: 1, u: 2, e: 3, o: 4 };
+            function segKana(seg) {
+                var mode = parseInt(el.getAttribute('data-mode') || '0', 10);
+                var idx = SEG_IDX[seg] || 0;
+                if (mode === 1 && dakuon) return dakuon.charAt(idx) || dakuon.charAt(0);
+                if (mode === 2 && handakuon) return handakuon.charAt(idx) || handakuon.charAt(0);
+                if (seg === 'a') return el.querySelector('.typing-kb-center').textContent;
+                return el.querySelector('.typing-kb-seg[data-seg="' + seg + '"]').textContent;
+            }
+            function appendKana(ch) {
+                if (!ch) return;
                 var prev = document.getElementById('typing-preview');
                 var cur = prev.textContent;
                 if (!cur || cur.indexOf('（点击') >= 0) cur = '';
-                prev.textContent = cur + el.getAttribute('data-kana');
+                prev.textContent = cur + ch;
+            }
+            // 中央：追加当前段 + 切换 mode（清→浊→半→清）
+            el.querySelector('.typing-kb-center').addEventListener('click', function (ev) {
+                ev.stopPropagation();
+                var mode = parseInt(el.getAttribute('data-mode') || '0', 10);
+                appendKana(segKana('a'));
+                mode = (mode + 1) % 3;
+                // 无浊音/半浊音的行：mode 不生效，中央假名保持清音
+                var next = el.querySelector('.typing-kb-center');
+                var a0 = next.getAttribute('data-a0') || 'あ';
+                if (mode === 1 && dakuon) next.textContent = dakuon.charAt(0);
+                else if (mode === 2 && handakuon) next.textContent = handakuon.charAt(0);
+                else next.textContent = a0;
+                el.setAttribute('data-mode', mode);
+            });
+            // 四角：追加对应段假名（保持当前 mode 的清音段）
+            el.querySelectorAll('.typing-kb-seg').forEach(function (s) {
+                s.addEventListener('click', function (ev) {
+                    ev.stopPropagation();
+                    appendKana(segKana(s.getAttribute('data-seg')));
+                });
+            });
+        });
+
+        // 小写 * / 特殊键：点击轮流追加
+        box.querySelectorAll('.typing-kb-extra').forEach(function (el) {
+            el.addEventListener('click', function () {
+                var kana = el.getAttribute('data-kana') || '';
+                var idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+                var ch = kana.charAt(idx % kana.length);
+                var prev = document.getElementById('typing-preview');
+                var cur = prev.textContent;
+                if (!cur || cur.indexOf('（点击') >= 0) cur = '';
+                prev.textContent = cur + ch;
+                el.setAttribute('data-idx', String((idx + 1) % kana.length));
             });
             el.addEventListener('mouseenter', function () {
                 el.style.background = 'rgba(var(--accent-color-rgb),0.15)';
