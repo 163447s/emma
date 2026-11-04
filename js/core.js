@@ -991,12 +991,19 @@ function createMessageFragment(msg, prevMsg, nextMsg, lastSenderRef) {
         contentWrapper.className = 'message-content-wrapper';
 
         const cardBox = document.createElement('div');
-        cardBox.className = 'tarot-card-msg' + (msg.tarot && !msg.tarot.upright ? ' reversed' : '');
-        cardBox.title = '点击查看解读';
+        cardBox.className = 'tarot-text-msg' + (msg.tarot && !msg.tarot.upright ? ' reversed' : '');
+        cardBox.title = '点击查看牌面与解读';
         cardBox.onclick = function () { if (window.Tarot) window.Tarot.openReadingFromMessage(cardBox); };
-        cardBox.innerHTML = (window.Tarot && typeof window.Tarot.renderCardInner === 'function')
-            ? window.Tarot.renderCardInner(msg.tarot)
-            : '';
+        const card = msg.tarot || {};
+        const pos = card.upright ? '正位' : '逆位';
+        const num = (window.Tarot && typeof window.Tarot.toRoman === 'function') ? window.Tarot.toRoman(Number(card.i)) : '';
+        const displayName = num ? num + '·' + String(card.name || '') : String(card.name || '塔罗牌');
+        cardBox.innerHTML =
+            '<div class="tarot-text-inner">' +
+            '<div class="tarot-text-top"><i class="fas fa-wand-magic-sparkles"></i><span class="tarot-text-name">' + displayName + '</span></div>' +
+            '<span class="tarot-text-pos ' + (card.upright ? 'pos-up' : 'pos-rev') + '">' + pos + '</span>' +
+            '<span class="tarot-text-hint"><i class="fas fa-hand-pointer"></i> 点击查看牌面与解读</span>' +
+            '</div>';
 
         let tarotActionsHTML = '';
         if (settings.replyEnabled) tarotActionsHTML += `<button class="meta-action-btn reply-btn" title="回复"><i class="fas fa-reply"></i></button>`;
