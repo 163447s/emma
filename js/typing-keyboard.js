@@ -1,29 +1,33 @@
 /* typing-keyboard.js —— 日语键盘打字：随机生成假名消息 + 输出端轻纠错（纠错B）
  * 定位：MJ 主动打字功能的消息生成器。触发机制由 core.js 现有逻辑负责。
  * 依赖：kana-map.js（window.KanaMap）
- * 暴露：window.TypingKeyboard = { generateTypingMessage, keyboardRows }
+ * 暴露：window.TypingKeyboard = { generateTypingMessage, keyboardGrid }
  * 说明：
- *   - 直接从标准五十音键盘（清音/浊音/半浊音/促音/长音/拨音）随机组合假名，允许无意义组合
+ *   - 键盘采用日本人日常使用的 12 键九宫格假名布局（flick 式）：あかさたなはまやらわ
+ *     十个行键 + 小写 * 键 + 特殊键（っーん）；每键默认 a 段，滑动选 i/u/e/o，
+ *     浊音点两下、半浊音点三下、小写用 * 键变换。布局仅用于设置页展示与试拼，
+ *     随机生成仍从五十音假名池组合（允许无意义组合）。
  *   - 纠错B 仅兜底极端垃圾输出：连续重复>3 去重、长度异常重生成、纯标点重生成；其余混乱原样保留
  */
 (function () {
     'use strict';
 
-    // 标准日语键盘布局（行分组，供设置页展示与生成参考）
-    var keyboardRows = [
-        { label: 'あ行', kana: 'あいうえお' },
-        { label: 'か行', kana: 'かきくけこ' },
-        { label: 'さ行', kana: 'さしすせそ' },
-        { label: 'た行', kana: 'たちつてと' },
-        { label: 'な行', kana: 'なにぬねの' },
-        { label: 'は行', kana: 'はひふへほ' },
-        { label: 'ま行', kana: 'まみむめも' },
-        { label: 'や行', kana: 'やゆよ' },
-        { label: 'ら行', kana: 'らりるれろ' },
-        { label: 'わ行', kana: 'わをん' },
-        { label: '浊音', kana: 'がぎぐげござじずぜぞだぢづでどばびぶべぼ' },
-        { label: '半浊音', kana: 'ぱぴぷぺぽ' },
-        { label: '特殊', kana: 'っーん' }
+    // ── 12键九宫格假名键盘布局（flick 式）──
+    // 每个行键：label=行名；a/i/u/e/o=该行五段（缺段留空）；dakuon=浊音段；handakuon=半浊音段
+    // 滑动方向（日本手机惯例）：上=い、左=う、右=え、下=お
+    var keyboardGrid = [
+        { label: 'あ', a: 'あ', i: 'い', u: 'う', e: 'え', o: 'お', dakuon: '', handakuon: '' },
+        { label: 'か', a: 'か', i: 'き', u: 'く', e: 'け', o: 'こ', dakuon: 'がぎぐげご', handakuon: '' },
+        { label: 'さ', a: 'さ', i: 'し', u: 'す', e: 'せ', o: 'そ', dakuon: 'ざじずぜぞ', handakuon: '' },
+        { label: 'た', a: 'た', i: 'ち', u: 'つ', e: 'て', o: 'と', dakuon: 'だぢづでど', handakuon: '' },
+        { label: 'な', a: 'な', i: 'に', u: 'ぬ', e: 'ね', o: 'の', dakuon: '', handakuon: '' },
+        { label: 'は', a: 'は', i: 'ひ', u: 'ふ', e: 'へ', o: 'ほ', dakuon: 'ばびぶべぼ', handakuon: 'ぱぴぷぺぽ' },
+        { label: 'ま', a: 'ま', i: 'み', u: 'む', e: 'め', o: 'も', dakuon: '', handakuon: '' },
+        { label: 'や', a: 'や', i: '', u: 'ゆ', e: '', o: 'よ', dakuon: '', handakuon: '' },
+        { label: 'ら', a: 'ら', i: 'り', u: 'る', e: 'れ', o: 'ろ', dakuon: '', handakuon: '' },
+        { label: 'わ', a: 'わ', i: '', u: '', e: '', o: 'を', dakuon: '', handakuon: '' },
+        { type: 'small', label: '小写 *', kana: 'っゃゅょぁぃぅぇぉ' },
+        { type: 'special', label: 'っ・ー・ん', kana: 'っーん' }
     ];
 
     var PUNCT = ['…', '！', '？'];
@@ -91,6 +95,6 @@
 
     window.TypingKeyboard = {
         generateTypingMessage: generateTypingMessage,
-        keyboardRows: keyboardRows
+        keyboardGrid: keyboardGrid
     };
 })();
