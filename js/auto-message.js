@@ -90,8 +90,8 @@
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
             '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
             '    日本人日常输入法：每个行键默认打 あ・か・さ…，滑动选段＝左い・上う・右え・下お（顺时针 い→う→え→お）；' +
-            '    浊音/半浊音：打完假名后点下方「゛゜」键（清→浊→半浊→清）；促音 っ 在小写 * 键、撥音 ん 在わ行上滑、' +
-            '    長音 ー 在空白键（空格/ー 轮流）；や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
+            '    左下「゛゜」键：给上一个假名加浊音 → 半浊 → 回清音；末尾没有可浊化的假名时，依次插入 っ / ー / 小写假名；' +
+            '    右下「、。?!」键输入标点；撥音 ん 在わ行上滑；や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
             '  </div>' +
             '  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;">' +
             '    <span style="font-size:12px;color:var(--text-secondary);">试打预览：</span>' +
@@ -175,11 +175,19 @@
         if (!grid) return;
         var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;margin:0 auto;">';
         grid.forEach(function (key) {
-            if (key.type === 'small' || key.type === 'space') {
-                // 小写 * 键 / 空白键（传统第12键，空格/長音ー 轮流）：点击轮流追加
-                var cls = key.type === 'small' ? 'small' : 'space';
-                var big = key.type === 'small' ? '小写 *' : '空白';
-                var sub = key.type === 'small' ? '小写假名轮流' : '空格 / 長音 ー';
+            if (key.type === 'transform') {
+                // 左下变换键（iPhone 位置的「゛゜」）：给上一个假名加浊音/半浊音，末尾不可浊化时插入 っ / ー / 小写
+                html += '<div class="typing-kb-transform" data-kana="' + key.kana + '" data-idx="0" title="浊音 / 半浊音 / っ / ー / 小写" style="' +
+                    'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
+                    'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;cursor:pointer;transition:all .15s;user-select:none;">' +
+                    '<span style="font-size:17px;font-weight:700;color:var(--text-primary);">゛゜</span>' +
+                    '<span style="font-size:9px;color:var(--text-secondary);line-height:1.3;text-align:center;">浊音 / 半浊</span>' +
+                    '</div>';
+            } else if (key.type === 'punct' || key.type === 'small' || key.type === 'space') {
+                // 标点键（、。?! 轮流）；兼容旧的小写 * / 空白键
+                var cls = key.type === 'punct' ? 'punct' : (key.type === 'small' ? 'small' : 'space');
+                var big = key.type === 'punct' ? '、。?!' : (key.type === 'small' ? '小写 *' : '空白');
+                var sub = key.type === 'punct' ? '标点' : (key.type === 'small' ? '小写假名轮流' : '空格 / 長音 ー');
                 html += '<div class="typing-kb-extra typing-kb-' + cls + '" data-kana="' + key.kana + '" data-idx="0" style="' +
                     'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
                     'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;cursor:pointer;transition:all .15s;user-select:none;">' +
@@ -203,14 +211,6 @@
             }
         });
         html += '</div>';
-        // ゛゜ 键（标准日式键盘的浊音/半浊音键）：点一下给上一个假名加浊音，再点变半浊/回清音
-        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;margin:10px auto 0;">' +
-            '<div></div>' +
-            '<div class="typing-kb-dakuten" title="给上一个假名加浊音 / 半浊音" style="position:relative;height:56px;border-radius:14px;' +
-            'background:var(--secondary-bg);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;' +
-            'font-size:17px;font-weight:700;color:var(--text-primary);cursor:pointer;user-select:none;transition:border-color .15s;">゛゜</div>' +
-            '<div></div>' +
-            '</div>';
         box.innerHTML = html;
 
         // 行键交互：连点中央切换 清音→浊音→半浊音；点四角直接输入对应段假名；
@@ -332,11 +332,12 @@
             dakuPairs.forEach(function (p) { CLEAN_TO_DAKU[p[0]] = p[1]; DAKU_TO_CLEAN[p[1]] = p[0]; });
             hanPairs.forEach(function (p) { CLEAN_TO_HAN[p[0]] = p[1]; HAN_TO_CLEAN[p[1]] = p[0]; });
         })();
-        box.querySelectorAll('.typing-kb-dakuten').forEach(function (el) {
+        box.querySelectorAll('.typing-kb-transform').forEach(function (el) {
+            var cycle = (el.getAttribute('data-kana') || 'っーゃゅょぁぃぅぇぉ').split('');
             el.addEventListener('click', function () {
                 var prev = document.getElementById('typing-preview');
                 var cur = prev.textContent;
-                if (!cur || cur.indexOf('（点击') >= 0) return;
+                if (cur.indexOf('（点击') >= 0) cur = '';
                 var last = cur.charAt(cur.length - 1);
                 var next = null;
                 if (HAN_TO_CLEAN[last]) {
@@ -347,7 +348,14 @@
                 } else if (CLEAN_TO_DAKU[last]) {
                     next = CLEAN_TO_DAKU[last];                 // 清 → 浊
                 }
-                if (next) prev.textContent = cur.slice(0, -1) + next;
+                if (next) {
+                    prev.textContent = cur.slice(0, -1) + next;
+                    return;
+                }
+                // 末尾没有可浊化的假名：轮流插入 促音 っ / 長音 ー / 小写假名
+                var idx = parseInt(el.getAttribute('data-idx') || '0', 10);
+                prev.textContent = cur + cycle[idx % cycle.length];
+                el.setAttribute('data-idx', String((idx + 1) % cycle.length));
             });
             el.addEventListener('mouseenter', function () { el.style.borderColor = 'var(--accent-color)'; });
             el.addEventListener('mouseleave', function () { el.style.borderColor = 'var(--border-color)'; });
