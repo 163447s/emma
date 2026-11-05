@@ -89,7 +89,7 @@
             '  <div class="settings-section-title"><i class="fas fa-keyboard"></i>12键九宫格假名键盘 · flick</div>' +
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
             '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
-            '    日本人日常输入法：每个行键默认打 あ・か・さ…，向上下左右滑动选 い・う・え・お（上い・左う・右え・下お）；' +
+            '    日本人日常输入法：每个行键默认打 あ・か・さ…，滑动选段＝左い・上う・右え・下お（顺时针 い→う→え→お）；' +
             '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；促音 っ 在小写 * 键、撥音 ん 在わ行上滑、' +
             '    長音 ー 在空白键（空格/ー 轮流）；や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
             '  </div>' +
