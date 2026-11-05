@@ -14,7 +14,7 @@
 
     // ── 12键九宫格假名键盘布局（flick 式）──
     // 每个行键：label=行名；a/i/u/e/o=该行五段（缺段留空）；dakuon=浊音段；handakuon=半浊音段
-    // 滑动方向（日本手机惯例）：上=い、左=う、右=え、下=お
+    // 滑动方向（日本手机 flick 惯例）：点=あ段、左=い、上=う、右=え、下=お
     var keyboardGrid = [
         { label: 'あ', a: 'あ', i: 'い', u: 'う', e: 'え', o: 'お', dakuon: '', handakuon: '' },
         { label: 'か', a: 'か', i: 'き', u: 'く', e: 'け', o: 'こ', dakuon: 'がぎぐげご', handakuon: '' },
@@ -23,10 +23,10 @@
         { label: 'な', a: 'な', i: 'に', u: 'ぬ', e: 'ね', o: 'の', dakuon: '', handakuon: '' },
         { label: 'は', a: 'は', i: 'ひ', u: 'ふ', e: 'へ', o: 'ほ', dakuon: 'ばびぶべぼ', handakuon: 'ぱぴぷぺぽ' },
         { label: 'ま', a: 'ま', i: 'み', u: 'む', e: 'め', o: 'も', dakuon: '', handakuon: '' },
-        { label: 'や', a: 'や', i: 'ゆ', u: '', e: '', o: 'よ', small: 'ゃゅょ', dakuon: '', handakuon: '' },
+        { label: 'や', a: 'や', i: '', u: 'ゆ', e: '', o: 'よ', small: 'ゃゅょ', dakuon: '', handakuon: '' },
         { label: 'ら', a: 'ら', i: 'り', u: 'る', e: 'れ', o: 'ろ', dakuon: '', handakuon: '' },
-        { label: 'わ', a: 'わ', i: 'ん', u: '', e: '', o: 'を', dakuon: '', handakuon: '' },
         { type: 'small', label: '小写 *', kana: 'っゃゅょぁぃぅぇぉ' },
+        { label: 'わ', a: 'わ', i: 'を', u: 'ん', e: '', o: '', dakuon: '', handakuon: '' },
         { type: 'space', label: '空白', kana: ' ー' }
     ];
 
