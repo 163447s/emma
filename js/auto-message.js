@@ -90,7 +90,7 @@
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
             '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
             '    日本人日常输入法：每个行键默认打 あ・か・さ…，滑动选段＝左い・上う・右え・下お（顺时针 い→う→え→お）；' +
-            '    浊音/半浊音：打完假名后点「゛゜」键（清→浊→半浊→清；连点行键中央也能切）；促音 っ 在小写 * 键、撥音 ん 在わ行上滑、' +
+            '    浊音/半浊音：打完假名后点下方「゛゜」键（清→浊→半浊→清）；促音 っ 在小写 * 键、撥音 ん 在わ行上滑、' +
             '    長音 ー 在空白键（空格/ー 轮流）；や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
             '  </div>' +
             '  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;">' +
@@ -191,7 +191,7 @@
                 // や行左角为小写 ゃゅょ（data-seg=small，点击轮流输入，拗音用）
                 var leftSeg = key.small ? 'small' : 'i';
                 var leftLabel = key.small || key.i;
-                html += '<div class="typing-kb-key" data-mode="0" data-dakuon="' + key.dakuon + '" data-handakuon="' + key.handakuon + '" style="' +
+                html += '<div class="typing-kb-key" data-a="' + key.a + '" style="' +
                     'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
                     'display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;user-select:none;">' +
                     '<span class="typing-kb-seg" data-seg="u" style="position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.u || '') + '</span>' +
@@ -199,7 +199,6 @@
                     '<span class="typing-kb-seg" data-seg="e" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.e || '') + '</span>' +
                     '<span class="typing-kb-seg" data-seg="o" style="position:absolute;bottom:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.o || '') + '</span>' +
                     '<span class="typing-kb-center" data-seg="a" data-a0="' + key.a + '" style="font-size:22px;font-weight:700;color:var(--accent-color);cursor:pointer;">' + key.a + '</span>' +
-                    '<span class="typing-kb-mode-tip" style="position:absolute;bottom:3px;right:6px;font-size:9px;color:var(--text-secondary);opacity:.7;">' + (key.dakuon ? '゛' : '') + (key.handakuon ? '゜' : '') + '</span>' +
                     '</div>';
             }
         });
@@ -217,18 +216,12 @@
         // 行键交互：连点中央切换 清音→浊音→半浊音；点四角直接输入对应段假名；
         // 拖拽滑动（flick）：按住往 左/上/右/下 拖再松开 → 选 i/u/e/o 段（や行向左拖出小写 ゃゅょ）
         box.querySelectorAll('.typing-kb-key').forEach(function (el) {
-            var dakuon = el.getAttribute('data-dakuon') || '';
-            var handakuon = el.getAttribute('data-handakuon') || '';
             var _suppress = false; // 拖拽结束后抑制本次 click，避免重复输入
-            // 取当前 mode 对应的段假名
-            var SEG_IDX = { a: 0, i: 1, u: 2, e: 3, o: 4 };
+            // 取该段对应的清音假名（浊音/半浊音统一由「゛゜」键追加）
             function segKana(seg) {
-                var mode = parseInt(el.getAttribute('data-mode') || '0', 10);
-                var idx = SEG_IDX[seg] || 0;
-                if (mode === 1 && dakuon) return dakuon.charAt(idx) || dakuon.charAt(0);
-                if (mode === 2 && handakuon) return handakuon.charAt(idx) || handakuon.charAt(0);
                 if (seg === 'a') return el.querySelector('.typing-kb-center').textContent;
-                return el.querySelector('.typing-kb-seg[data-seg="' + seg + '"]').textContent;
+                var node = el.querySelector('.typing-kb-seg[data-seg="' + seg + '"]');
+                return node ? node.textContent : '';
             }
             // 拖拽方向 → 段假名（左拖且该键有小写段=や行，则轮流输入 ゃゅょ）
             function dirKana(dir) {
@@ -285,16 +278,8 @@
             el.querySelector('.typing-kb-center').addEventListener('click', function (ev) {
                 ev.stopPropagation();
                 if (_suppress) { _suppress = false; return; }
-                var mode = parseInt(el.getAttribute('data-mode') || '0', 10);
+                // 标准日式键盘：点中央只输入清音「あ段」，浊音/半浊音走后「゛゜」键
                 appendKana(segKana('a'));
-                mode = (mode + 1) % 3;
-                // 无浊音/半浊音的行：mode 不生效，中央假名保持清音
-                var next = el.querySelector('.typing-kb-center');
-                var a0 = next.getAttribute('data-a0') || 'あ';
-                if (mode === 1 && dakuon) next.textContent = dakuon.charAt(0);
-                else if (mode === 2 && handakuon) next.textContent = handakuon.charAt(0);
-                else next.textContent = a0;
-                el.setAttribute('data-mode', mode);
             });
             // 四角：追加对应段假名（保持当前 mode 的清音段）；小写段（や行左角 ゃゅょ）点击轮流
             el.querySelectorAll('.typing-kb-seg').forEach(function (s) {
