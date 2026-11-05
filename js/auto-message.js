@@ -187,14 +187,14 @@
                     '<span style="font-size:10px;color:var(--text-secondary);">' + sub + '</span>' +
                     '</div>';
             } else {
-                // 行键：中央 a 段大字 + 四角 i/u/e/o 小字（上い・左う・右え・下お），连点切换清音/浊音/半浊音；
+                // 行键：中央 a 段大字 + 四角 i/u/e/o 小字（左い・上う・右え・下お，与日本手机 flick 一致），连点切换清音/浊音/半浊音；
                 // や行左角为小写 ゃゅょ（data-seg=small，点击轮流输入，拗音用）
-                var leftSeg = key.small ? 'small' : 'u';
-                var leftLabel = key.small || key.u;
+                var leftSeg = key.small ? 'small' : 'i';
+                var leftLabel = key.small || key.i;
                 html += '<div class="typing-kb-key" data-mode="0" data-dakuon="' + key.dakuon + '" data-handakuon="' + key.handakuon + '" style="' +
                     'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
                     'display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;user-select:none;">' +
-                    '<span class="typing-kb-seg" data-seg="i" style="position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.i || '') + '</span>' +
+                    '<span class="typing-kb-seg" data-seg="u" style="position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.u || '') + '</span>' +
                     '<span class="typing-kb-seg" data-seg="' + leftSeg + '" data-cycle="' + (key.small || '') + '" data-idx="0" style="position:absolute;left:7px;top:50%;transform:translateY(-50%);font-size:11px;color:' + (key.small ? 'var(--warning-color,#e6a23c)' : 'var(--text-secondary)') + ';cursor:pointer;">' + leftLabel + '</span>' +
                     '<span class="typing-kb-seg" data-seg="e" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.e || '') + '</span>' +
                     '<span class="typing-kb-seg" data-seg="o" style="position:absolute;bottom:5px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--text-secondary);cursor:pointer;">' + (key.o || '') + '</span>' +
@@ -207,7 +207,7 @@
         box.innerHTML = html;
 
         // 行键交互：连点中央切换 清音→浊音→半浊音；点四角直接输入对应段假名；
-        // 拖拽滑动（flick）：按住往 上/左/右/下 拖再松开 → 选 i/u/e/o 段（や行向左拖出小写 ゃゅょ）
+        // 拖拽滑动（flick）：按住往 左/上/右/下 拖再松开 → 选 i/u/e/o 段（や行向左拖出小写 ゃゅょ）
         box.querySelectorAll('.typing-kb-key').forEach(function (el) {
             var dakuon = el.getAttribute('data-dakuon') || '';
             var handakuon = el.getAttribute('data-handakuon') || '';
@@ -226,7 +226,7 @@
             function dirKana(dir) {
                 var smallEl = el.querySelector('.typing-kb-seg[data-cycle]');
                 var smallCycle = smallEl ? (smallEl.getAttribute('data-cycle') || '') : '';
-                if (dir === 'u' && smallCycle) {
+                if (dir === 'i' && smallCycle) {
                     var idx = parseInt(smallEl.getAttribute('data-idx') || '0', 10);
                     smallEl.setAttribute('data-idx', String((idx + 1) % smallCycle.length));
                     return smallCycle.charAt(idx % smallCycle.length);
@@ -252,8 +252,8 @@
                 var dy = ev.clientY - pointerState.y;
                 if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
                     pointerState.dir = Math.abs(dx) > Math.abs(dy)
-                        ? (dx < 0 ? 'u' : 'e')
-                        : (dy < 0 ? 'i' : 'o');
+                        ? (dx < 0 ? 'i' : 'e')
+                        : (dy < 0 ? 'u' : 'o');
                 }
             });
             el.addEventListener('pointerup', function (ev) {
