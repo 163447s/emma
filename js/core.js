@@ -1869,8 +1869,6 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                             type: 'normal'
                         });
                         playSound('message');
-                        // 历史发送记录：只记录，MJ 不从历史里选消息发送
-                        try { window.AutoMessage.record(typingText); } catch (e) {}
                         // 对方消息通知（与字卡回复一致）
                         if (typeof window._sendPartnerNotification === 'function') {
                             window._sendPartnerNotification(partnerName, '⌨️ ' + typingText);
