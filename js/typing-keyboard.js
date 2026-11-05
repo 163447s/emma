@@ -3,10 +3,10 @@
  * 依赖：kana-map.js（window.KanaMap）
  * 暴露：window.TypingKeyboard = { generateTypingMessage, keyboardGrid }
  * 说明：
- *   - 键盘采用日本人日常使用的 12 键九宫格假名布局（flick 式）：あかさたなはまやらわ
- *     十个行键 + 小写 * 键 + 特殊键（っーん）；每键默认 a 段，滑动选 i/u/e/o，
- *     浊音点两下、半浊音点三下、小写用 * 键变换。布局仅用于设置页展示与试拼，
- *     随机生成仍从五十音假名池组合（允许无意义组合）。
+ *   - 键盘采用日本手机标准的 12 键九宫格假名布局（iPhone「かな」/ Gboard 12 键同款）：
+ *     あ・か・さ・た・な・は・ま・や・ら 九个行键 + わ行键 + 左下变换键（゛゜ / っ ー 小写）+ 右下标点键。
+ *     点中央=あ段，滑动=左い・上う・右え・下お；浊音/半浊音由左下变换键作用于上一个假名。
+ *     布局仅用于设置页展示与试拼，随机生成仍从假名池组合（允许无意义组合）。
  *   - 纠错B 仅兜底极端垃圾输出：连续重复>3 去重、长度异常重生成、纯标点重生成；其余混乱原样保留
  */
 (function () {
@@ -25,9 +25,9 @@
         { label: 'ま', a: 'ま', i: 'み', u: 'む', e: 'め', o: 'も', dakuon: '', handakuon: '' },
         { label: 'や', a: 'や', i: '', u: 'ゆ', e: '', o: 'よ', small: 'ゃゅょ', dakuon: '', handakuon: '' },
         { label: 'ら', a: 'ら', i: 'り', u: 'る', e: 'れ', o: 'ろ', dakuon: '', handakuon: '' },
-        { type: 'small', label: '小写 *', kana: 'っゃゅょぁぃぅぇぉ' },
+        { type: 'transform', label: '゛゜', kana: 'っーゃゅょぁぃぅぇぉ' },
         { label: 'わ', a: 'わ', i: 'を', u: 'ん', e: '', o: '', dakuon: '', handakuon: '' },
-        { type: 'space', label: '空白', kana: ' ー' }
+        { type: 'punct', label: '、。?!', kana: '、。？！' }
     ];
 
     var PUNCT = ['…', '！', '？'];
