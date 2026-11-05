@@ -180,7 +180,7 @@
                 html += '<div class="typing-kb-transform" data-kana="' + key.kana + '" data-idx="0" title="浊音 / 半浊音 / っ / ー / 小写" style="' +
                     'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
                     'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;cursor:pointer;transition:all .15s;user-select:none;">' +
-                    '<span style="font-size:17px;font-weight:700;color:var(--text-primary);">゛゜</span>' +
+                    '<span style="font-size:23px;font-weight:700;color:var(--text-primary);line-height:1;">゛゜</span>' +
                     '<span style="font-size:9px;color:var(--text-secondary);line-height:1.3;text-align:center;">浊音 / 半浊</span>' +
                     '</div>';
             } else if (key.type === 'punct' || key.type === 'small' || key.type === 'space') {
@@ -191,7 +191,7 @@
                 html += '<div class="typing-kb-extra typing-kb-' + cls + '" data-kana="' + key.kana + '" data-idx="0" style="' +
                     'position:relative;height:84px;border-radius:14px;background:var(--secondary-bg);border:1px solid var(--border-color);' +
                     'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;cursor:pointer;transition:all .15s;user-select:none;">' +
-                    '<span style="font-size:15px;font-weight:700;color:var(--text-primary);">' + big + '</span>' +
+                    '<span style="font-size:' + (key.type === 'punct' ? 17 : 15) + 'px;font-weight:700;color:var(--text-primary);">' + big + '</span>' +
                     '<span style="font-size:10px;color:var(--text-secondary);">' + sub + '</span>' +
                     '</div>';
             } else {
