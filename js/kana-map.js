@@ -30,8 +30,17 @@
     var HANDAKUON = [
         'ぱぴぷぺぽ'
     ];
-    // 特殊：促音 / 长音 / 拨音（ん 已在清音わ行）
-    var SPECIAL = ['っ', 'ー', 'ん'];
+    // 拗音（33 个，两字一组，随机生成时整体出现）
+    var YOON_LIST = [
+        'きゃ', 'きゅ', 'きょ', 'しゃ', 'しゅ', 'しょ', 'ちゃ', 'ちゅ', 'ちょ',
+        'にゃ', 'にゅ', 'にょ', 'ひゃ', 'ひゅ', 'ひょ', 'みゃ', 'みゅ', 'みょ',
+        'りゃ', 'りゅ', 'りょ', 'ぎゃ', 'ぎゅ', 'ぎょ', 'じゃ', 'じゅ', 'じょ',
+        'びゃ', 'びゅ', 'びょ', 'ぴゃ', 'ぴゅ', 'ぴょ'
+    ];
+    // 小写假名
+    var SMALL_KANA = ['ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ', 'ゃ', 'ゅ', 'ょ'];
+    // 特殊：促音 / 长音（ん 已在清音わ行，不重复放入）
+    var SPECIAL = ['っ', 'ー'];
 
     // 全部假名（生成用字符池）
     function flatten(rows) {
@@ -39,7 +48,8 @@
         rows.forEach(function (r) { for (var i = 0; i < r.length; i++) out.push(r[i]); });
         return out;
     }
-    var ALL_KANA = flatten(SEION).concat(flatten(DAKUON)).concat(flatten(HANDAKUON)).concat(SPECIAL);
+    var ALL_KANA = flatten(SEION).concat(flatten(DAKUON)).concat(flatten(HANDAKUON))
+        .concat(YOON_LIST).concat(SMALL_KANA).concat(SPECIAL);
 
     // ── 假名 → 标准罗马音（纠错A 编辑距离匹配用；含特殊兼容写法）──
     var KANA_ROMAN = {
