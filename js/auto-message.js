@@ -90,7 +90,7 @@
             '  <div id="typing-keyboard-view" style="padding:8px 12px;"></div>' +
             '  <div style="font-size:11px;color:var(--text-secondary);padding:2px 12px 4px;line-height:1.7;">' +
             '    日本人日常输入法：每个行键默认打 あ・か・さ…，滑动选段＝左い・上う・右え・下お（顺时针 い→う→え→お）；' +
-            '    连点两下出浊音（が・ざ・だ・ば）、连点三下出半浊音（ぱ）；促音 っ 在小写 * 键、撥音 ん 在わ行上滑、' +
+            '    浊音/半浊音：打完假名后点「゛゜」键（清→浊→半浊→清；连点行键中央也能切）；促音 っ 在小写 * 键、撥音 ん 在わ行上滑、' +
             '    長音 ー 在空白键（空格/ー 轮流）；や行左角出小写 ゃゅょ（拗音：き + ゃ = きゃ）。' +
             '  </div>' +
             '  <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;">' +
@@ -204,6 +204,14 @@
             }
         });
         html += '</div>';
+        // ゛゜ 键（标准日式键盘的浊音/半浊音键）：点一下给上一个假名加浊音，再点变半浊/回清音
+        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;margin:10px auto 0;">' +
+            '<div></div>' +
+            '<div class="typing-kb-dakuten" title="给上一个假名加浊音 / 半浊音" style="position:relative;height:56px;border-radius:14px;' +
+            'background:var(--secondary-bg);border:1px solid var(--border-color);display:flex;align-items:center;justify-content:center;' +
+            'font-size:17px;font-weight:700;color:var(--text-primary);cursor:pointer;user-select:none;transition:border-color .15s;">゛゜</div>' +
+            '<div></div>' +
+            '</div>';
         box.innerHTML = html;
 
         // 行键交互：连点中央切换 清音→浊音→半浊音；点四角直接输入对应段假名；
@@ -243,8 +251,9 @@
             // 拖拽滑动（Pointer Events 覆盖鼠标与触摸）
             var pointerState = null;
             el.addEventListener('pointerdown', function (ev) {
-                pointerState = { x: ev.clientX, y: ev.clientY, dir: null };
-                try { el.setPointerCapture(ev.pointerId); } catch (e) {}
+                // 不在按下时就捕获指针：捕获后随后的 click 目标会变成整个键，
+                // 导致点中央大字/四角小字收不到 click（鼠标端表现为“点了没反应”）
+                pointerState = { x: ev.clientX, y: ev.clientY, dir: null, id: ev.pointerId, captured: false };
             });
             el.addEventListener('pointermove', function (ev) {
                 if (!pointerState) return;
@@ -254,6 +263,11 @@
                     pointerState.dir = Math.abs(dx) > Math.abs(dy)
                         ? (dx < 0 ? 'i' : 'e')
                         : (dy < 0 ? 'u' : 'o');
+                    // 确认在拖拽后再捕获指针，保证滑出键外仍能收到 move/up
+                    if (!pointerState.captured) {
+                        try { el.setPointerCapture(pointerState.id); } catch (e) {}
+                        pointerState.captured = true;
+                    }
                 }
             });
             el.addEventListener('pointerup', function (ev) {
@@ -319,6 +333,39 @@
                 el.style.background = 'var(--secondary-bg)';
                 el.style.borderColor = 'var(--border-color)';
             });
+        });
+
+        // ゛゜ 键：清 → 浊 → 半浊 → 清（标准日式键盘的浊音操作，作用于已输入的最后一个假名）
+        var DAKU_TO_CLEAN = {}, CLEAN_TO_DAKU = {}, CLEAN_TO_HAN = {}, HAN_TO_CLEAN = {};
+        (function () {
+            var dakuPairs = [['か', 'が'], ['き', 'ぎ'], ['く', 'ぐ'], ['け', 'げ'], ['こ', 'ご'],
+                             ['さ', 'ざ'], ['し', 'じ'], ['す', 'ず'], ['せ', 'ぜ'], ['そ', 'ぞ'],
+                             ['た', 'だ'], ['ち', 'ぢ'], ['つ', 'づ'], ['て', 'で'], ['と', 'ど'],
+                             ['は', 'ば'], ['ひ', 'び'], ['ふ', 'ぶ'], ['へ', 'べ'], ['ほ', 'ぼ'],
+                             ['う', 'ゔ']];
+            var hanPairs = [['は', 'ぱ'], ['ひ', 'ぴ'], ['ふ', 'ぷ'], ['へ', 'ぺ'], ['ほ', 'ぽ']];
+            dakuPairs.forEach(function (p) { CLEAN_TO_DAKU[p[0]] = p[1]; DAKU_TO_CLEAN[p[1]] = p[0]; });
+            hanPairs.forEach(function (p) { CLEAN_TO_HAN[p[0]] = p[1]; HAN_TO_CLEAN[p[1]] = p[0]; });
+        })();
+        box.querySelectorAll('.typing-kb-dakuten').forEach(function (el) {
+            el.addEventListener('click', function () {
+                var prev = document.getElementById('typing-preview');
+                var cur = prev.textContent;
+                if (!cur || cur.indexOf('（点击') >= 0) return;
+                var last = cur.charAt(cur.length - 1);
+                var next = null;
+                if (HAN_TO_CLEAN[last]) {
+                    next = HAN_TO_CLEAN[last];                 // 半浊 → 清
+                } else if (DAKU_TO_CLEAN[last]) {
+                    var clean = DAKU_TO_CLEAN[last];
+                    next = CLEAN_TO_HAN[clean] || clean;        // 浊 → 半浊（は行）或回清音
+                } else if (CLEAN_TO_DAKU[last]) {
+                    next = CLEAN_TO_DAKU[last];                 // 清 → 浊
+                }
+                if (next) prev.textContent = cur.slice(0, -1) + next;
+            });
+            el.addEventListener('mouseenter', function () { el.style.borderColor = 'var(--accent-color)'; });
+            el.addEventListener('mouseleave', function () { el.style.borderColor = 'var(--border-color)'; });
         });
     }
 
