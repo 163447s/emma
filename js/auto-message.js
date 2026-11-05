@@ -1,16 +1,15 @@
-/* auto-message.js —— 打字功能：设置面板 UI + 历史发送记录 + 开关
+/* auto-message.js —— 打字功能：设置面板 UI + 开关
  * 定位：
  *   - 主动触发完全复用 core.js 现有逻辑（simulateReply / autoSendTimer），本文件不重复实现触发
- *   - 提供打字功能设置入口（高级功能 → 打字功能）、日语键盘展示、纠错A 试打演示、历史发送记录（只读）
- * 依赖：kana-map.js / typing-keyboard.js / roman-correction.js / kana-correction.js（均需先加载）
- * 暴露：window.AutoMessage = { isEnabled, getChance, record, getHistory, clearHistory }
+ *   - 提供打字功能设置入口（高级功能 → 打字功能）与日语键盘展示
+ *   - 不保存打字记录、不做纠错提示（按需求移除）
+ * 依赖：kana-map.js / typing-keyboard.js（均需先加载）
+ * 暴露：window.AutoMessage = { isEnabled, getChance }
  */
 (function () {
     'use strict';
 
     var ENABLED_KEY = 'typingEnabled';
-    var HISTORY_KEY = 'typingHistory';
-    var HISTORY_MAX = 100;
     var CHANCE = 0.1; // 与原机制随机风格一致：拍一拍 3%、表情/emoji 20% 均为系统随机项；打字乱码为"梦角不在线"的偶发体验（文档：有时候是混乱的），取 10%
 
     // ── 开关 / 历史记录 ──
@@ -22,23 +21,7 @@
     }
     function getChance() { return CHANCE; }
 
-    function getHistory() {
-        try {
-            var arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-            return Array.isArray(arr) ? arr : [];
-        } catch (e) { return []; }
-    }
-    /** 记录一条打字消息（只记录，MJ 不从历史里选消息发送） */
-    function record(text) {
-        if (!text) return;
-        var arr = getHistory();
-        arr.unshift({ text: String(text), time: Date.now(), lang: 'ja' });
-        if (arr.length > HISTORY_MAX) arr = arr.slice(0, HISTORY_MAX);
-        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); } catch (e) {}
-    }
-    function clearHistory() {
-        try { localStorage.removeItem(HISTORY_KEY); } catch (e) {}
-    }
+
 
     // ── 设置面板 UI ──
     var _modalCreated = false;
@@ -99,19 +82,7 @@
             '    <button id="typing-random-btn" style="margin-left:auto;border:none;background:var(--accent-color);color:#fff;font-size:12px;font-weight:700;padding:4px 14px;border-radius:10px;cursor:pointer;">随机生成一条</button>' +
             '  </div>' +
             '</div>' +
-            '<div class="settings-section">' +
-            '  <div class="settings-section-title"><i class="fas fa-pen"></i>纠错提示（试打罗马音）</div>' +
-            '  <div style="padding:8px 12px;">' +
-            '    <input id="typing-roman-input" placeholder="输入罗马音试试，如 konnichiwa / des / gakou / kitte…" style="width:100%;padding:8px 12px;border-radius:10px;border:1px solid var(--border-color);background:var(--secondary-bg);color:var(--text-primary);font-size:13px;box-sizing:border-box;" />' +
-            '    <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">转换：<span id="typing-roman-kana" style="color:var(--accent-color);font-weight:700;">—</span></div>' +
-            '    <div id="typing-correction-tip" style="font-size:12px;margin-top:4px;color:var(--warning-color,#e6a23c);min-height:18px;">拼写/助词纠错提示会显示在这里（只提示，不改动输入）</div>' +
-            '  </div>' +
-            '</div>' +
-            '<div class="settings-section">' +
-            '  <div class="settings-section-title"><i class="fas fa-history"></i>历史发送记录 <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">（只记录，MJ 不从历史里选消息）</span></div>' +
-            '  <div id="typing-history-list" style="max-height:240px;overflow-y:auto;padding:4px 12px 8px;"></div>' +
-            '  <div style="padding:0 12px 8px;"><button id="typing-history-clear" style="border:1px solid var(--border-color);background:none;color:var(--text-secondary);font-size:12px;padding:3px 10px;border-radius:8px;cursor:pointer;">清空记录</button></div>' +
-            '</div>' +
+
             '</div>';
 
         document.body.appendChild(modal);
@@ -137,35 +108,7 @@
             var text = window.TypingKeyboard.generateTypingMessage();
             document.getElementById('typing-preview').textContent = text;
         });
-        // 试打输入（纠错A）
-        var input = document.getElementById('typing-roman-input');
-        input.addEventListener('input', function () {
-            var v = input.value.trim();
-            var kanaEl = document.getElementById('typing-roman-kana');
-            var tipEl = document.getElementById('typing-correction-tip');
-            if (!v) { kanaEl.textContent = '—'; tipEl.textContent = '拼写/助词纠错提示会显示在这里（只提示，不改动输入）'; tipEl.style.color = 'var(--warning-color,#e6a23c)'; return; }
-            var kana = window.KanaMap.romajiToKana(v);
-            kanaEl.textContent = kana;
-            var hint = '';
-            // 拼写纠错（最后一段罗马音）
-            var segs = v.split(/[^a-z'’]+/i).filter(function (s) { return /[a-z]/i.test(s); });
-            var last = segs.length ? segs[segs.length - 1] : '';
-            if (last && last.length >= 2 && window.RomanCorrection) {
-                var rs = window.RomanCorrection.suggest(last, 1);
-                if (rs) hint = '你是不是想打 ' + rs.to + '？（' + rs.kana + '）';
-            }
-            // 助词纠错
-            if (!hint && window.KanaCorrection) {
-                var ks = window.KanaCorrection.suggest(kana);
-                if (ks && ks.msg) hint = ks.msg;
-            }
-            tipEl.textContent = hint || '✓ 没有发现可提示的问题';
-            tipEl.style.color = hint ? 'var(--warning-color,#e6a23c)' : '#52c41a';
-        });
 
-        // 历史
-        renderHistory();
-        document.getElementById('typing-history-clear').addEventListener('click', function () { clearHistory(); renderHistory(); });
     }
 
     function renderKeyboard() {
@@ -362,27 +305,6 @@
         });
     }
 
-    function renderHistory() {
-        var list = document.getElementById('typing-history-list');
-        if (!list) return;
-        var arr = getHistory();
-        if (!arr.length) {
-            list.innerHTML = '<div style="padding:12px 0;text-align:center;font-size:12px;color:var(--text-secondary);">还没有打字记录——MJ 主动打字发消息后会自动记录在这里</div>';
-            return;
-        }
-        var html = '';
-        arr.forEach(function (item) {
-            var d = new Date(item.time);
-            var pad = function (x) { return x < 10 ? '0' + x : x; };
-            var timeStr = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-            html += '<div style="display:flex;gap:8px;padding:7px 10px;margin-bottom:6px;border-radius:10px;background:var(--secondary-bg);border:1px solid var(--border-color);align-items:baseline;">' +
-                '<span style="font-size:14px;color:var(--text-primary);word-break:break-all;flex:1;">' + escapeHtml(item.text) + '</span>' +
-                '<span style="font-size:10px;color:var(--text-secondary);flex-shrink:0;">' + timeStr + ' · 日語</span>' +
-                '</div>';
-        });
-        list.innerHTML = html;
-    }
-
     function escapeHtml(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
@@ -390,7 +312,6 @@
     function showTypingModal() {
         var modal = document.getElementById('typing-modal');
         if (!modal) return;
-        renderHistory();
         // 与全站其他弹窗一致：使用官方 showModal（会播放 modal-content 透明度/位移动画）
         if (typeof window.showModal === 'function') {
             window.showModal(modal);
@@ -410,6 +331,8 @@
 
     // 入口随页面就绪挂载
     function init() {
+        // 历史发送记录功能已移除，顺手清掉本地遗留的打字记录
+        try { localStorage.removeItem('typingHistory'); } catch (e) {}
         ensureEntry();
     }
     if (document.readyState === 'loading') {
@@ -420,9 +343,6 @@
 
     window.AutoMessage = {
         isEnabled: isEnabled,
-        getChance: getChance,
-        record: record,
-        getHistory: getHistory,
-        clearHistory: clearHistory
+        getChance: getChance
     };
 })();
