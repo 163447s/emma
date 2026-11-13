@@ -479,141 +479,70 @@
         return [{ type: 'path', color: col, width: 9, points: wobble(pts, 3) }];
     }
 
-    /** 五角星 */
-    function genStar() {
-        var col = pick([COLORS[4], COLORS[0]]);
-        var R = rnd(190, 240), r = R * 0.42, cx = W / 2, cy = W / 2 - 10, pts = [];
+    /** 夹在区间内，防止曲线跑出画布 */
+    function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+    /** 随手一笔：乱起乱收 + 中间弯一下，像手指在屏幕上划过去的 */
+    function genFreeLine() {
+        var sx = rnd(W * 0.14, W * 0.86), sy = rnd(W * 0.14, W * 0.86);
+        var ex = rnd(W * 0.14, W * 0.86), ey = rnd(W * 0.14, W * 0.86);
+        var cx = clamp((sx + ex) / 2 + rnd(-W * 0.2, W * 0.2), 30, W - 30);
+        var cy = clamp((sy + ey) / 2 + rnd(-W * 0.2, W * 0.2), 30, W - 30);
+        var pts = [];
         for (var i = 0; i <= 10; i++) {
-            var ang = -Math.PI / 2 + i * Math.PI / 5;
-            var rad = (i % 2 === 0) ? R : r;
-            pts.push({ x: cx + Math.cos(ang) * rad, y: cy + Math.sin(ang) * rad });
+            var t = i / 10;
+            pts.push({
+                x: (1 - t) * (1 - t) * sx + 2 * (1 - t) * t * cx + t * t * ex,
+                y: (1 - t) * (1 - t) * sy + 2 * (1 - t) * t * cy + t * t * ey
+            });
         }
-        return [{ type: 'path', color: col, width: 8, points: wobble(pts, 3) }];
+        return { type: 'path', color: inkColor(), width: rnd(4, 6.5), points: wobble(pts, 7) };
     }
 
-    /** 螺旋：半径随圈数收敛，保证整条线留在画布内（越界会被裁断） */
-    function genSpiral() {
-        var col = inkColor(), pts = [], steps = 13;
-        for (var i = 0; i <= steps; i++) {
-            var ang = i * 0.52;
-            var rad = 10 + i * (W * 0.33 / steps);   // 最大约 224px，离边缘还留余量
-            pts.push({ x: W / 2 + Math.cos(ang) * rad, y: W / 2 - 20 + Math.sin(ang) * rad });
+    /** 绕圈：随手打一两个圈，半径和歪斜都随机 */
+    function genLoop() {
+        var cx = W / 2 + rnd(-80, 80), cy = W / 2 + rnd(-80, 80);
+        var rr = rnd(70, 145), pts = [];
+        var turns = Math.PI * 2 * rnd(1.1, 2.3);
+        for (var a = 0; a <= turns; a += 0.16) {
+            pts.push({
+                x: cx + Math.cos(a) * rr + rnd(-7, 7),
+                y: cy + Math.sin(a) * rr * 0.88 + rnd(-7, 7)
+            });
         }
-        return [{ type: 'path', color: col, width: 8, points: wobble(pts, 3) }];
+        return { type: 'path', color: inkColor(), width: rnd(4, 6.5), points: pts };
     }
 
-    /** 沿一条边取样：中间插两个点，避免平滑算法把直角抹成圆弧 */
-    function densify(p1, p2) {
-        return [
-            p1,
-            { x: (p1.x * 2 + p2.x) / 3, y: (p1.y * 2 + p2.y) / 3 },
-            { x: (p1.x + p2.x * 2) / 3, y: (p1.y + p2.y * 2) / 3 },
-            p2
-        ];
-    }
-
-    /** 把四边形的四条边串成闭合路径点列 */
-    function loopPts(corners) {
-        var out = [];
-        for (var i = 0; i < corners.length; i++) {
-            var s = densify(corners[i], corners[(i + 1) % corners.length]);
-            out = out.concat(i === 0 ? s : s.slice(1));
+    /** 乱写几个字：字母或假名，位置散着落 */
+    function genScrawls() {
+        var chars = ('abcdefghijklmnopqrstuvwxyz' + 'あいうえおかきくけこさしすせそたちつてとなにぬねの').split('');
+        var out = [], n = 2 + Math.floor(Math.random() * 4);
+        for (var i = 0; i < n; i++) {
+            out.push({
+                type: 'text',
+                text: pick(chars),
+                x: W / 2 + rnd(-W * 0.3, W * 0.3),
+                y: W / 2 + rnd(-W * 0.3, W * 0.3),
+                size: rnd(48, 84),
+                color: inkColor(),
+                rot: rnd(-0.35, 0.35)
+            });
         }
-        return out;
-    }
-
-    /** 立体方块：正面 + 右上偏移的背面 + 四条纵深连线 */
-    function genCube() {
-        var col = inkColor();
-        var a = rnd(120, 165);                  // 正面边长
-        var d = a * rnd(0.40, 0.52);            // 纵深
-        var x0 = W / 2 - (a + d) / 2;
-        var y0 = W / 2 - a / 2 + d / 2 + 30;
-        var f1 = [
-            { x: x0, y: y0 }, { x: x0 + a, y: y0 },
-            { x: x0 + a, y: y0 + a }, { x: x0, y: y0 + a }
-        ];
-        var f2 = f1.map(function (p) { return { x: p.x + d, y: p.y - d }; });
-
-        var out = [
-            { type: 'path', color: col, width: 7.5, points: wobble(loopPts(f1), 2) },   // 正面四边
-            { type: 'path', color: col, width: 6, points: wobble(densify(f2[0], f2[1]), 1.5) },  // 背面顶边
-            { type: 'path', color: col, width: 6, points: wobble(densify(f2[1], f2[2]), 1.5) }   // 背面右边
-        ];
-        // 只画看得见的三条纵深线（左下那条被正面挡住）
-        [0, 1, 2].forEach(function (k) {
-            out.push({ type: 'path', color: col, width: 5, points: wobble(densify(f1[k], f2[k]), 1.5) });
-        });
-        return out;
-    }
-
-    /** 随手涂两三条线（横的竖的都有） */
-    function genScribble() {
-        var out = [], n = 2 + Math.floor(Math.random() * 2);
-        for (var k = 0; k < n; k++) {
-            var pts = [];
-            var horizontal = Math.random() < 0.6;
-            var base = rnd(W * 0.24, W * 0.76);
-            var amp = rnd(18, 60), phase = rnd(0, Math.PI * 2), freq = rnd(28, 60);
-            for (var t = 40; t <= W - 40; t += 12) {
-                var v = base + Math.sin(t / freq + phase) * amp + rnd(-8, 8);
-                pts.push(horizontal ? { x: t, y: v } : { x: v, y: t });
-            }
-            out.push({ type: 'path', color: inkColor(), width: rnd(4.5, 8), points: wobble(pts, 2) });
-        }
-        return out;
-    }
-
-    /** 写字：日语短句为主（Ta 是日本人），偶尔也写个英文单词 */
-    function genWord(kind) {
-        var text;
-        if (kind === 'en') {
-            text = pick(['LOVE', 'miss u', 'good night', 'hi', 'thinking of u', 'you']);
-        } else {
-            text = pick([
-                'おはよう', 'おやすみ', 'だいすき', '会いたい', 'げんき？',
-                'ここにいる', 'またね', 'いま、おもう', 'すき', 'ねえ',
-                'ありがとう', 'はやく会いたい'
-            ]);
-        }
-        // 假名比拉丁字母宽，字数越多字号越小，免得顶出画布
-        var len = text.length;
-        var size = len <= 4 ? rnd(76, 96) : (len <= 6 ? rnd(62, 74) : rnd(50, 62));
-        return [{
-            type: 'text',
-            text: text,
-            x: W / 2 + rnd(-20, 20),
-            y: W / 2,
-            size: size,
-            color: inkColor(),
-            rot: (Math.random() - 0.5) * 0.12
-        }];
-    }
-
-    /** 画一颗小心心 + 一只小太阳（组合涂鸦） */
-    function genCombo() {
-        var out = genHeart(rnd(11, 14));   // 心形收小，右上角才有地方写字
-        out.push({
-            type: 'text',
-            text: pick(['♡', 'だいすき', 'おやすみ', 'おはよう', 'まってる']),
-            x: W / 2 + rnd(130, 168),
-            y: W / 2 - rnd(150, 185),
-            size: rnd(60, 72),
-            color: pick([COLORS[0], COLORS[1]]),
-            rot: rnd(-0.18, 0.18)
-        });
         return out;
     }
 
     function buildPartnerStrokes() {
         var r = Math.random();
-        if (r < 0.22) return genHeart();
-        if (r < 0.36) return genStar();
-        if (r < 0.50) return genCube();
-        if (r < 0.62) return genSpiral();
-        if (r < 0.76) return genScribble();
-        if (r < 0.90) return genWord(Math.random() < 0.35 ? 'en' : 'ja');
-        return genCombo();
+        // 大多数就是随手几笔，偶尔绕个圈、写几个字、画个小心心
+        if (r < 0.52) {
+            var out = [], n = 1 + Math.floor(Math.random() * 3);
+            for (var i = 0; i < n; i++) out.push(genFreeLine());
+            return out;
+        }
+        if (r < 0.68) return [genLoop()];
+        if (r < 0.84) return genScrawls();
+        if (r < 0.92) return genHeart(rnd(12, 18));
+        return [genFreeLine(), genLoop()].concat(genScrawls().slice(0, 1));
     }
 
     /** 生成一张梦角涂鸦的 Base64 */
