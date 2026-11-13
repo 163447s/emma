@@ -502,10 +502,12 @@
         var f2 = f1.map(function (p) { return { x: p.x + d, y: p.y - d }; });
 
         var out = [
-            { type: 'path', color: col, width: 7.5, points: wobble(loopPts(f1), 2) },
-            { type: 'path', color: col, width: 7.5, points: wobble(loopPts(f2), 2) }
+            { type: 'path', color: col, width: 7.5, points: wobble(loopPts(f1), 2) },   // 正面四边
+            { type: 'path', color: col, width: 6, points: wobble(densify(f2[0], f2[1]), 1.5) },  // 背面顶边
+            { type: 'path', color: col, width: 6, points: wobble(densify(f2[1], f2[2]), 1.5) }   // 背面右边
         ];
-        [0, 1, 2, 3].forEach(function (k) {
+        // 只画看得见的三条纵深线（左下那条被正面挡住）
+        [0, 1, 2].forEach(function (k) {
             out.push({ type: 'path', color: col, width: 5, points: wobble(densify(f1[k], f2[k]), 1.5) });
         });
         return out;
@@ -554,8 +556,8 @@
             type: 'text',
             text: pick(['♡', 'just for u', '天天开心', '早']),
             x: W / 2 + rnd(120, 160),
-            y: W / 2 - rnd(90, 130),
-            size: 54,
+            y: W / 2 - rnd(100, 135),
+            size: rnd(72, 88),
             color: pick([COLORS[0], COLORS[1]]),
             rot: rnd(-0.18, 0.18)
         });
