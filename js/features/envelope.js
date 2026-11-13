@@ -52,6 +52,8 @@ async function checkEnvelopeStatus() {
         saveEnvelopeData();
         if (newReplyLetter) showEnvelopeReplyPopup(newReplyLetter);
     }
+    // 顺带检查梦角是否有主动寄来的信
+    checkProactiveEnvelope();
 }
 
 function showEnvelopeReplyPopup(letter) {
@@ -140,6 +142,96 @@ function generateEnvelopeReplyText() {
 }
 
 
+// ───────────── 梦角主动来信 ─────────────
+// 零配置：第一封在 1-4 小时内，之后每 24-48 小时一封；内容取自现有字卡池（与回信一致）
+const PROACTIVE_LETTER_KEY = 'envelopeProactiveState';
+const PROACTIVE_FIRST_HOURS = [1, 4];
+const PROACTIVE_LOOP_HOURS = [24, 48];
+let _proactiveChecking = false;
+
+function _randHours(range) {
+    return range[0] + Math.random() * (range[1] - range[0]);
+}
+
+function generateProactiveLetterText() {
+    let text = '';
+    try {
+        text = generateEnvelopeReplyText();
+    } catch (e) { text = ''; }
+    text = String(text || '').replace(/undefined/g, '').trim();
+    if (text.length < 8) {
+        text = '今天忽然很想写信给你。没什么特别的事，只是想到你的时候，心里安静了一会儿。';
+    }
+    return text;
+}
+
+function showProactiveLetterPopup(letter) {
+    const existing = document.getElementById('envelope-reply-popup');
+    if (existing) existing.remove();
+    const popup = document.createElement('div');
+    popup.id = 'envelope-reply-popup';
+    popup.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--secondary-bg);border:1px solid var(--border-color);border-radius:20px;padding:18px 20px;z-index:8000;max-width:320px;width:88%;box-shadow:0 8px 32px rgba(0,0,0,0.18);display:flex;flex-direction:column;gap:12px;animation:slideUpNotif 0.4s cubic-bezier(0.22,1,0.36,1);';
+    popup.innerHTML = `
+        <style>@keyframes slideUpNotif{from{opacity:0;transform:translateX(-50%) translateY(24px) scale(0.9)}60%{transform:translateX(-50%) translateY(-4px) scale(1.02)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}</style>
+        <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:26px;">💌</span>
+            <div>
+                <div style="font-size:14px;font-weight:700;color:var(--text-primary);">收到一封信</div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;opacity:0.8;">Ta 没等你先寄，就主动提笔写来一封。</div>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+            <button onclick="document.getElementById('envelope-reply-popup').remove();" style="flex:1;padding:8px 0;border-radius:12px;border:1px solid var(--border-color);background:var(--primary-bg);color:var(--text-secondary);font-size:13px;cursor:pointer;">稍后拆开</button>
+            <button onclick="openEnvelopeAndViewReply('${letter.id}');" style="flex:2;padding:8px 0;border-radius:12px;border:none;background:var(--accent-color);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">拆开阅读 ✉</button>
+        </div>`;
+    document.body.appendChild(popup);
+    setTimeout(() => { if (popup.parentNode) popup.remove(); }, 9000);
+}
+
+async function checkProactiveEnvelope() {
+    if (_proactiveChecking) return;
+    _proactiveChecking = true;
+    try {
+        await loadEnvelopeData();
+        const key = getStorageKey(PROACTIVE_LETTER_KEY);
+        let st = await localforage.getItem(key);
+        const now = Date.now();
+        if (!st || typeof st.nextAt !== 'number') {
+            st = { nextAt: now + _randHours(PROACTIVE_FIRST_HOURS) * 3600000, lastAt: 0 };
+            await localforage.setItem(key, st);
+            return;
+        }
+        if (now < st.nextAt) return;
+        const letter = {
+            id: 'proactive_' + now + '_' + Math.random().toString(36).substr(2, 4),
+            content: generateProactiveLetterText(),
+            receivedTime: now,
+            isNew: true,
+            proactive: true
+        };
+        envelopeData.inbox.push(letter);
+        saveEnvelopeData();
+        st.lastAt = now;
+        st.nextAt = now + _randHours(PROACTIVE_LOOP_HOURS) * 3600000;
+        await localforage.setItem(key, st);
+        renderEnvelopeLists();
+        showProactiveLetterPopup(letter);
+        playSound('message');
+    } catch (e) {
+        console.warn('主动来信检查失败', e);
+    } finally {
+        _proactiveChecking = false;
+    }
+}
+
+window.checkProactiveEnvelope = checkProactiveEnvelope;
+
+window.addEventListener('load', function () {
+    setTimeout(function () { checkProactiveEnvelope(); }, 8000);
+    setInterval(function () { checkProactiveEnvelope(); }, 20 * 60 * 1000);
+});
+
+
 window.switchEnvTab = function(tab) {
     currentEnvTab = tab;
     document.getElementById('env-tab-outbox').classList.toggle('active', tab === 'outbox');
@@ -212,8 +304,8 @@ function renderInboxList() {
     if (envelopeData.inbox.length === 0) {
         list.innerHTML = `<div class="env-empty">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/><polyline points="22 13 12 13"/><path d="M19 16l-5-3-5 3"/></svg>
-            <div style="font-size:14px;font-weight:500;margin-top:4px;">还没有收到回信</div>
-            <div style="font-size:12px;margin-top:6px;opacity:0.6;">对方正在认真回复中，请稍候~</div>
+            <div style="font-size:14px;font-weight:500;margin-top:4px;">还没有收到来信</div>
+            <div style="font-size:12px;margin-top:6px;opacity:0.6;">寄封信给 Ta，或者等 Ta 主动提笔~</div>
         </div>`;
         return;
     }
@@ -221,6 +313,7 @@ function renderInboxList() {
         const date = new Date(letter.receivedTime).toLocaleDateString('zh-CN', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'});
         const preview = letter.content.length > 50 ? letter.content.substring(0, 50) + '…' : letter.content;
         const isNew = letter.isNew;
+        const isProactive = !!letter.proactive;
         const origPreview = letter.originalContent ? (letter.originalContent.length > 32 ? letter.originalContent.substring(0, 32) + '…' : letter.originalContent) : '';
         return `
         <div class="env-letter-item reply ${isNew ? 'env-letter-new' : ''}" onclick="viewEnvLetter('inbox','${letter.id}')">
@@ -229,6 +322,7 @@ function renderInboxList() {
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:3px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>
                     收到 · ${date}
                     ${isNew ? '<span style="background:rgba(255,255,255,0.3);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:6px;">新</span>' : ''}
+                    ${isProactive ? '<span style="background:rgba(255,255,255,0.22);color:#fff;font-size:9px;padding:1px 5px;border-radius:6px;margin-left:6px;">Ta 主动写来</span>' : ''}
                 </div>
                 <div class="env-stamp">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -257,7 +351,9 @@ window.viewEnvLetter = function(section, id) {
     editingEnvId = id;
     editingEnvSection = section;
 
-    document.getElementById('env-view-title').textContent = section === 'outbox' ? '寄出的信' : '收到的回信';
+    document.getElementById('env-view-title').textContent = section === 'outbox'
+        ? '寄出的信'
+        : (letter.proactive ? 'Ta 的来信' : '收到的回信');
 
     const dateObj = letter.timestamp ? new Date(letter.timestamp) : new Date();
     const y = dateObj.getFullYear();
