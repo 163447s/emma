@@ -204,7 +204,7 @@
             'font-size:12px;padding:5px 10px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:4px;}',
             '.dd-tool.on{background:var(--accent-color,#3fa45b);border-color:var(--accent-color,#3fa45b);color:#fff;}',
             '.dd-stage{padding:0 12px;}',
-            '#doodle-canvas{width:100%;height:auto;max-width:min(100%,46vh);margin:0 auto;display:block;background:#fff;border-radius:14px;',
+            '#doodle-canvas{width:100%;height:auto;max-width:min(100%,50vh);margin:0 auto;display:block;background:#fff;border-radius:14px;',
             'border:1px solid var(--border-color,#e8e8e8);touch-action:none;-webkit-user-select:none;user-select:none;}',
             '.dd-textrow{display:flex;gap:6px;padding:8px 12px 0;}',
             '.dd-textrow input{flex:1;min-width:0;padding:8px 11px;border-radius:10px;border:1px solid var(--border-color,#e5e5e5);',
@@ -352,8 +352,15 @@
         buildModal();
         redraw();                 // 每次打开都按笔画记录重画（保证撤销/清空后状态一致）
         refreshUi();
+        // 原站有多个 showModal 包装，部分版本不会给 .modal-content 置 opacity，
+        // 这里显式把卡片设为可见，再交给 showModal 处理动画/其他逻辑
+        modalEl.style.display = 'flex';
+        var card = modalEl.querySelector('.dd-card');
+        if (card) {
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0) scale(1)';
+        }
         if (typeof window.showModal === 'function') window.showModal(modalEl);
-        else modalEl.style.display = 'flex';
     }
 
     function closeBoard() {
