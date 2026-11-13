@@ -129,8 +129,33 @@ window.openEnvelopeAndViewReply = function(replyId) {
     }, 200);
 };
 
+const LETTER_FALLBACK_LINES = [
+    '今天没什么事，就是忽然想到你了。',
+    '我这边天气还行，风有点大。',
+    '你要是忙，就不用急着回我。',
+    '有时候觉得，写信比发消息更容易说真话。',
+    '我把想说的话写慢一点，你也慢慢看。',
+    '最近睡得好吗，别又熬到很晚。',
+    '想到你的时候，心里会安静一会儿。',
+    '这封信没什么要紧事，只是想让你知道我在。',
+    '若你也在想我，那就当我们同时抬头看了同一个月亮。',
+    '写到最后也没什么可说的了，只想抱抱你。'
+];
+
+function pickFallbackLetterText() {
+    const pool = LETTER_FALLBACK_LINES.slice();
+    const count = Math.floor(Math.random() * 3) + 6;
+    let out = '';
+    for (let i = 0; i < count && pool.length; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        out += pool.splice(idx, 1)[0];
+    }
+    return out;
+}
+
 function generateEnvelopeReplyText() {
-    const sourcePool = [...customReplies];
+    const sourcePool = [...customReplies].filter(s => String(s || '').trim().length >= 2);
+    if (!sourcePool.length) return pickFallbackLetterText();
     const sentenceCount = Math.floor(Math.random() * (12 - 8 + 1)) + 8;
     let replyContent = "";
     for (let i = 0; i < sentenceCount; i++) {
@@ -159,9 +184,9 @@ function generateProactiveLetterText() {
         text = generateEnvelopeReplyText();
     } catch (e) { text = ''; }
     text = String(text || '').replace(/undefined/g, '').trim();
-    if (text.length < 8) {
-        text = '今天忽然很想写信给你。没什么特别的事，只是想到你的时候，心里安静了一会儿。';
-    }
+    // 去掉标点后若没有实质文字（字卡池为空时会拼出纯标点），改用内置信件文案
+    const meaningful = text.replace(/[，。！？、,.!?…\-—~～\s"'‘’“”「」【】（）()]/g, '');
+    if (meaningful.length < 6) text = pickFallbackLetterText();
     return text;
 }
 
