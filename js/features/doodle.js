@@ -61,7 +61,8 @@
         if (s.type === 'text') {
             c.translate(s.x, s.y);
             c.rotate(s.rot || 0);
-            c.font = '700 ' + s.size + 'px "Comic Sans MS", "Kaiti SC", "STKaiti", "KaiTi", cursive, sans-serif';
+            c.font = '700 ' + s.size + 'px "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", ' +
+                '"Meiryo", "Noto Sans JP", "Noto Sans CJK JP", "MS Gothic", "Kaiti SC", "KaiTi", cursive, sans-serif';
             c.textAlign = 'center';
             c.textBaseline = 'middle';
             c.fillStyle = s.color;
@@ -563,20 +564,27 @@
         return out;
     }
 
-    /** 写字：英文单词或中文短句 */
+    /** 写字：日语短句为主（Ta 是日本人），偶尔也写个英文单词 */
     function genWord(kind) {
         var text;
         if (kind === 'en') {
-            text = pick(['LOVE', 'miss u', 'good night', 'hi', 'thinking of u', 'you', 'see u soon']);
+            text = pick(['LOVE', 'miss u', 'good night', 'hi', 'thinking of u', 'you']);
         } else {
-            text = pick(['想你', '晚安', '在呢', '抱抱', '早安', '想见你', '今天也想你', '我在这里']);
+            text = pick([
+                'おはよう', 'おやすみ', 'だいすき', '会いたい', 'げんき？',
+                'ここにいる', 'またね', 'いま、おもう', 'すき', 'ねえ',
+                'ありがとう', 'はやく会いたい'
+            ]);
         }
+        // 假名比拉丁字母宽，字数越多字号越小，免得顶出画布
+        var len = text.length;
+        var size = len <= 4 ? rnd(76, 96) : (len <= 6 ? rnd(62, 74) : rnd(50, 62));
         return [{
             type: 'text',
             text: text,
             x: W / 2 + rnd(-20, 20),
             y: W / 2,
-            size: text.length > 6 ? rnd(52, 66) : rnd(74, 96),
+            size: size,
             color: inkColor(),
             rot: (Math.random() - 0.5) * 0.12
         }];
@@ -587,7 +595,7 @@
         var out = genHeart();
         out.push({
             type: 'text',
-            text: pick(['♡', 'just for u', '天天开心', '早']),
+            text: pick(['♡', 'だいすき', 'おやすみ', 'おはよう', 'まってる']),
             x: W / 2 + rnd(120, 160),
             y: W / 2 - rnd(100, 135),
             size: rnd(72, 88),
@@ -604,7 +612,7 @@
         if (r < 0.50) return genCube();
         if (r < 0.62) return genSpiral();
         if (r < 0.76) return genScribble();
-        if (r < 0.90) return genWord(Math.random() < 0.55 ? 'en' : 'zh');
+        if (r < 0.90) return genWord(Math.random() < 0.35 ? 'en' : 'ja');
         return genCombo();
     }
 
