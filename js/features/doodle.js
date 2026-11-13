@@ -356,6 +356,7 @@
         // 原站有多个 showModal 包装，部分版本不会给 .modal-content 置 opacity，
         // 这里显式把卡片设为可见，再交给 showModal 处理动画/其他逻辑
         modalEl.style.display = 'flex';
+        modalEl.style.animation = 'none';          // 不走原站弹窗动画，避免动画被节流时卡在 opacity:0
         var card = modalEl.querySelector('.dd-card');
         if (card) {
             card.style.opacity = '1';
@@ -456,47 +457,71 @@
         return [{ type: 'path', color: col, width: 8, points: wobble(pts, 3) }];
     }
 
-    /** 螺旋 */
+    /** 螺旋：半径随圈数收敛，保证整条线留在画布内（越界会被裁断） */
     function genSpiral() {
-        var col = inkColor(), pts = [], steps = 26;
-        for (var i = 0; i < steps; i++) {
-            var ang = i * 0.42;
-            var rad = 8 + i * (W * 0.028);
+        var col = inkColor(), pts = [], steps = 13;
+        for (var i = 0; i <= steps; i++) {
+            var ang = i * 0.52;
+            var rad = 10 + i * (W * 0.33 / steps);   // 最大约 224px，离边缘还留余量
             pts.push({ x: W / 2 + Math.cos(ang) * rad, y: W / 2 - 20 + Math.sin(ang) * rad });
         }
-        return [{ type: 'path', color: col, width: 7, points: wobble(pts, 3) }];
+        return [{ type: 'path', color: col, width: 8, points: wobble(pts, 3) }];
     }
 
-    /** 立体方块（两个面 + 连线） */
+    /** 沿一条边取样：中间插两个点，避免平滑算法把直角抹成圆弧 */
+    function densify(p1, p2) {
+        return [
+            p1,
+            { x: (p1.x * 2 + p2.x) / 3, y: (p1.y * 2 + p2.y) / 3 },
+            { x: (p1.x + p2.x * 2) / 3, y: (p1.y + p2.y * 2) / 3 },
+            p2
+        ];
+    }
+
+    /** 把四边形的四条边串成闭合路径点列 */
+    function loopPts(corners) {
+        var out = [];
+        for (var i = 0; i < corners.length; i++) {
+            var s = densify(corners[i], corners[(i + 1) % corners.length]);
+            out = out.concat(i === 0 ? s : s.slice(1));
+        }
+        return out;
+    }
+
+    /** 立体方块：正面 + 右上偏移的背面 + 四条纵深连线 */
     function genCube() {
         var col = inkColor();
-        var a = rnd(150, 200), ox = rnd(55, 80), oy = -rnd(45, 70);
-        var x0 = W / 2 - a / 2, y0 = W / 2 - a / 2 + 40;
-        var face1 = [
-            { x: x0, y: y0 }, { x: x0 + a, y: y0 }, { x: x0 + a, y: y0 + a }, { x: x0, y: y0 + a }, { x: x0, y: y0 }
+        var a = rnd(120, 165);                  // 正面边长
+        var d = a * rnd(0.40, 0.52);            // 纵深
+        var x0 = W / 2 - (a + d) / 2;
+        var y0 = W / 2 - a / 2 + d / 2 + 30;
+        var f1 = [
+            { x: x0, y: y0 }, { x: x0 + a, y: y0 },
+            { x: x0 + a, y: y0 + a }, { x: x0, y: y0 + a }
         ];
-        var face2 = face1.map(function (p) { return { x: p.x + ox, y: p.y + oy }; });
-        var links = [0, 1, 2, 3].map(function (i) {
-            return [{ x: face1[i].x, y: face1[i].y }, { x: face2[i].x, y: face2[i].y }];
-        });
+        var f2 = f1.map(function (p) { return { x: p.x + d, y: p.y - d }; });
+
         var out = [
-            { type: 'path', color: col, width: 8, points: wobble(face1, 2.5) },
-            { type: 'path', color: col, width: 6, points: wobble(face2, 2.5) }
+            { type: 'path', color: col, width: 7.5, points: wobble(loopPts(f1), 2) },
+            { type: 'path', color: col, width: 7.5, points: wobble(loopPts(f2), 2) }
         ];
-        links.forEach(function (l) {
-            out.push({ type: 'path', color: col, width: 5, points: wobble(l, 2) });
+        [0, 1, 2, 3].forEach(function (k) {
+            out.push({ type: 'path', color: col, width: 5, points: wobble(densify(f1[k], f2[k]), 1.5) });
         });
         return out;
     }
 
-    /** 随手涂两三条线 */
+    /** 随手涂两三条线（横的竖的都有） */
     function genScribble() {
         var out = [], n = 2 + Math.floor(Math.random() * 2);
         for (var k = 0; k < n; k++) {
-            var pts = [], baseY = rnd(W * 0.25, W * 0.75);
-            var amp = rnd(24, 70), phase = rnd(0, Math.PI * 2);
-            for (var x = 40; x <= W - 40; x += 12) {
-                pts.push({ x: x, y: baseY + Math.sin(x / 46 + phase) * amp + rnd(-10, 10) });
+            var pts = [];
+            var horizontal = Math.random() < 0.6;
+            var base = rnd(W * 0.24, W * 0.76);
+            var amp = rnd(18, 60), phase = rnd(0, Math.PI * 2), freq = rnd(28, 60);
+            for (var t = 40; t <= W - 40; t += 12) {
+                var v = base + Math.sin(t / freq + phase) * amp + rnd(-8, 8);
+                pts.push(horizontal ? { x: t, y: v } : { x: v, y: t });
             }
             out.push({ type: 'path', color: inkColor(), width: rnd(4.5, 8), points: wobble(pts, 2) });
         }
