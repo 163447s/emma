@@ -217,7 +217,6 @@ async function checkProactiveEnvelope() {
     if (_proactiveChecking) return;
     _proactiveChecking = true;
     try {
-        await loadEnvelopeData();
         const key = getStorageKey(PROACTIVE_LETTER_KEY);
         let st = await localforage.getItem(key);
         const now = Date.now();
@@ -226,7 +225,9 @@ async function checkProactiveEnvelope() {
             await localforage.setItem(key, st);
             return;
         }
+        // 未到投递时间就直接返回，不碰信件数据，避免与回信流程互相覆盖
         if (now < st.nextAt) return;
+        await loadEnvelopeData();
         const letter = {
             id: 'proactive_' + now + '_' + Math.random().toString(36).substr(2, 4),
             content: generateProactiveLetterText(),
