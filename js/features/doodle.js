@@ -187,7 +187,8 @@
         var st = document.createElement('style');
         st.id = 'doodle-style';
         st.innerHTML = [
-            '#doodle-modal{z-index:2300;}',
+            '#doodle-modal{z-index:2300;position:fixed;inset:0;display:none;align-items:center;justify-content:center;',
+            'background:rgba(0,0,0,.6);padding:12px;box-sizing:border-box;}',
             '#doodle-modal .dd-card{background:var(--secondary-bg,#fff);border-radius:20px;width:94%;max-width:440px;',
             'padding:0;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.22);display:flex;flex-direction:column;',
             'max-height:94vh;}',
@@ -225,7 +226,7 @@
         modalEl.className = 'modal';
         modalEl.id = 'doodle-modal';
         modalEl.innerHTML = [
-            '<div class="dd-card modal-content">',
+            '<div class="dd-card">',
             '  <div class="dd-head">',
             '    <div class="dd-title"><i class="fas fa-paint-brush"></i>涂鸦板</div>',
             '    <button class="dd-close" id="dd-close" title="关闭"><i class="fas fa-times"></i></button>',
