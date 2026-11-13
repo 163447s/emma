@@ -190,7 +190,7 @@
             '#doodle-modal{z-index:2300;position:fixed;inset:0;display:none;align-items:center;justify-content:center;',
             'background:rgba(0,0,0,.6);padding:12px;box-sizing:border-box;}',
             '#doodle-modal .dd-card{background:var(--secondary-bg,#fff);border-radius:20px;width:94%;max-width:440px;',
-            'padding:0;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.22);display:flex;flex-direction:column;',
+            'padding:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 12px 40px rgba(0,0,0,.22);display:flex;flex-direction:column;',
             'max-height:94vh;}',
             '.dd-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;}',
             '.dd-head .dd-title{font-size:14px;font-weight:700;color:var(--text-primary,#222);letter-spacing:1px;',
@@ -205,8 +205,13 @@
             'font-size:12px;padding:5px 10px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:4px;}',
             '.dd-tool.on{background:var(--accent-color,#3fa45b);border-color:var(--accent-color,#3fa45b);color:#fff;}',
             '.dd-stage{padding:0 12px;}',
-            '#doodle-canvas{width:100%;height:auto;max-width:min(100%,50vh);margin:0 auto;display:block;background:#fff;border-radius:14px;',
+            '#doodle-canvas{width:100%;height:auto;max-width:min(100%,32vh);margin:0 auto;display:block;background:#fff;border-radius:14px;',
             'border:1px solid var(--border-color,#e8e8e8);touch-action:none;-webkit-user-select:none;user-select:none;}',
+            '.dd-keys{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;padding:8px 12px 0;}',
+            '.dd-key{border:1px solid var(--border-color,#e5e5e5);background:var(--primary-bg,#fafafa);',
+            'color:var(--text-primary,#333);font-size:13px;font-weight:600;height:28px;border-radius:8px;cursor:pointer;',
+            'display:flex;align-items:center;justify-content:center;padding:0;line-height:1;}',
+            '.dd-key:active{background:var(--accent-color,#3fa45b);border-color:var(--accent-color,#3fa45b);color:#fff;}',
             '.dd-textrow{display:flex;gap:6px;padding:8px 12px 0;}',
             '.dd-textrow input{flex:1;min-width:0;padding:8px 11px;border-radius:10px;border:1px solid var(--border-color,#e5e5e5);',
             'background:var(--primary-bg,#fafafa);color:var(--text-primary,#222);font-size:12px;outline:none;}',
@@ -239,6 +244,7 @@
             '    <button class="dd-tool" id="dd-clear"><i class="fas fa-trash-alt"></i>清空</button>',
             '  </div>',
             '  <div class="dd-stage"><canvas id="doodle-canvas"></canvas></div>',
+            '  <div class="dd-keys" id="dd-keys"></div>',
             '  <div class="dd-textrow">',
             '    <input id="dd-text" maxlength="20" placeholder="写句话上去（中/英文都行）">',
             '    <button class="dd-tool" id="dd-text-add">写上</button>',
@@ -299,6 +305,17 @@
             strokes = [];
             redraw();
         });
+        // A–Z 字母键盘：点一下就落到画布上（和参考站一样，字母是随手打上去的）
+        var keysBox = document.getElementById('dd-keys');
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function (ch) {
+            var k = document.createElement('button');
+            k.className = 'dd-key';
+            k.type = 'button';
+            k.textContent = ch;
+            k.addEventListener('click', function () { addLetter(ch); });
+            keysBox.appendChild(k);
+        });
+
         document.getElementById('dd-text-add').addEventListener('click', addTextFromInput);
         document.getElementById('dd-text').addEventListener('keydown', function (e) {
             if (e.key === 'Enter') { e.preventDefault(); addTextFromInput(); }
@@ -327,6 +344,22 @@
         });
         var er = document.getElementById('dd-eraser');
         if (er) er.classList.toggle('on', tool.erase);
+    }
+
+    /** 点字母键：随手落在画布上，位置和字号都带点随机，像真人打的 */
+    function addLetter(ch) {
+        var x = W / 2 + rnd(-W * 0.22, W * 0.22);
+        var y = W / 2 + rnd(-W * 0.26, W * 0.26);
+        strokes.push({
+            type: 'text',
+            text: ch,
+            x: x,
+            y: y,
+            size: rnd(58, 92),
+            color: tool.erase ? COLORS[0] : tool.color,
+            rot: rnd(-0.22, 0.22)
+        });
+        redraw();
     }
 
     /** 写字：落点从画布中心开始，已有文字就依次往下排，超出再回到顶部 */
