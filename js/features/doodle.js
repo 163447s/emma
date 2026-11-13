@@ -205,7 +205,7 @@
             'font-size:12px;padding:5px 10px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:4px;}',
             '.dd-tool.on{background:var(--accent-color,#3fa45b);border-color:var(--accent-color,#3fa45b);color:#fff;}',
             '.dd-stage{padding:0 12px;}',
-            '#doodle-canvas{width:100%;height:auto;max-width:min(100%,32vh);margin:0 auto;display:block;background:#fff;border-radius:14px;',
+            '#doodle-canvas{width:100%;height:auto;max-width:min(100%,28vh);margin:0 auto;display:block;background:#fff;border-radius:14px;',
             'border:1px solid var(--border-color,#e8e8e8);touch-action:none;-webkit-user-select:none;user-select:none;}',
             '.dd-keys{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;padding:8px 12px 0;}',
             '.dd-key{border:1px solid var(--border-color,#e5e5e5);background:var(--primary-bg,#fafafa);',
