@@ -534,14 +534,14 @@
     function buildPartnerStrokes() {
         var r = Math.random();
         // 大多数就是随手几笔，偶尔绕个圈、写几个字、画个小心心
-        if (r < 0.52) {
-            var out = [], n = 1 + Math.floor(Math.random() * 3);
+        if (r < 0.50) {
+            var out = [], n = 2 + Math.floor(Math.random() * 2);   // 最少两笔，一张纸不至于太空
             for (var i = 0; i < n; i++) out.push(genFreeLine());
             return out;
         }
-        if (r < 0.68) return [genLoop()];
-        if (r < 0.84) return genScrawls();
-        if (r < 0.92) return genHeart(rnd(12, 18));
+        if (r < 0.66) return [genLoop()];
+        if (r < 0.82) return genScrawls();
+        if (r < 0.92) return genHeart(rnd(12, 17));
         return [genFreeLine(), genLoop()].concat(genScrawls().slice(0, 1));
     }
 
