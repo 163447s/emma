@@ -468,9 +468,9 @@
     }
 
     /** 心形 */
-    function genHeart() {
+    function genHeart(scale) {
         var col = pick([COLORS[1], COLORS[1], COLORS[0]]);
-        var s = rnd(16, 22), cx = W / 2, cy = W / 2 + 10, pts = [];
+        var s = scale || rnd(16, 22), cx = W / 2, cy = W / 2 + 10, pts = [];
         for (var t = 0; t <= Math.PI * 2 + 0.01; t += 0.10) {
             var x = 16 * Math.pow(Math.sin(t), 3);
             var y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
@@ -592,13 +592,13 @@
 
     /** 画一颗小心心 + 一只小太阳（组合涂鸦） */
     function genCombo() {
-        var out = genHeart();
+        var out = genHeart(rnd(11, 14));   // 心形收小，右上角才有地方写字
         out.push({
             type: 'text',
             text: pick(['♡', 'だいすき', 'おやすみ', 'おはよう', 'まってる']),
-            x: W / 2 + rnd(120, 160),
-            y: W / 2 - rnd(100, 135),
-            size: rnd(72, 88),
+            x: W / 2 + rnd(130, 168),
+            y: W / 2 - rnd(150, 185),
+            size: rnd(60, 72),
             color: pick([COLORS[0], COLORS[1]]),
             rot: rnd(-0.18, 0.18)
         });
