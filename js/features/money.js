@@ -18,7 +18,7 @@
     var PARTNER_START = 600;          // 梦角初始余额
     var AUTO_FIRST_HOURS = [4, 12];   // 她第一笔：4–12 小时后
     var AUTO_LOOP_HOURS = [12, 36];   // 之后：12–36 小时一笔
-    var CLAIM_DELAY = [2000, 9000];   // 你发出去的红包，她多久后收（毫秒）
+    var CLAIM_DELAY = [8000, 20000];   // 你发出去的红包，她多久后收（毫秒）
 
     var QUICK = [5.2, 8.88, 13.14, 52, 131.4];             // 快捷金额
     var PARTNER_AMOUNTS = [5.2, 8.88, 13.14, 20, 33, 52, 66.6];  // 她发来的金额池
@@ -265,6 +265,20 @@
         }, delay);
     }
 
+    /**
+     * 刷新页面后，之前发出去还没被收的红包要接着等：
+     * 超过 1 分钟的直接安排她收，否则按原节奏补一个计时器。
+     */
+    function resumePendingClaims() {
+        var list = (typeof messages !== 'undefined' && messages) ? messages : [];
+        var now = Date.now();
+        list.forEach(function (m) {
+            if (!m || !m.money || m.money.status !== 'pending' || m.sender !== 'user') return;
+            var ts = new Date(m.timestamp).getTime();
+            if (now - ts > 60000) schedulePartnerClaim(m.id);
+        });
+    }
+
     /* ═══════════════ 六、她主动发来（Ta → 我） ═══════════════ */
 
     function partnerSend() {
@@ -335,11 +349,11 @@
             '.mb-card-in:active{transform:scale(.97);}',
             '.mb-red{background:linear-gradient(160deg,#f0653c,#e0442d);}',
             '.mb-blue{background:linear-gradient(160deg,#4a86e8,#3a6fd0);}',
-            '.mb-card-in.is-claimed{opacity:.55;filter:saturate(.7);}',
+            '.mb-card-in.is-claimed{opacity:.7;filter:saturate(.8);}',
             '.mb-line{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.95;}',
             '.mb-ico{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);display:flex;',
             'align-items:center;justify-content:center;font-size:11px;}',
-            '.mb-amt{display:flex;align-items:baseline;gap:3px;font-size:24px;font-weight:800;letter-spacing:.5px;margin:7px 0 3px;line-height:1.15;}',
+            '.mb-amt{display:flex;align-items:baseline;gap:5px;font-size:24px;font-weight:800;letter-spacing:.5px;margin:7px 0 3px;line-height:1.15;}',
             '.mb-amt small{flex:none;font-size:13px;font-weight:600;opacity:.9;letter-spacing:0;}',
             '.mb-note{font-size:11px;opacity:.9;line-height:1.35;word-break:break-word;}',
             '.mb-foot{font-size:10.5px;opacity:.85;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25);',
@@ -523,6 +537,7 @@
             watchRender();
             mountAll();
             refreshBalance();
+            resumePendingClaims();                        // 刷新前没被收的红包继续等她
             setTimeout(checkAuto, 15000);                 // 启动 15 秒后先检查一次
             setInterval(checkAuto, 30 * 60 * 1000);       // 之后每半小时一次
         });
