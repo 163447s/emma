@@ -10,7 +10,7 @@
  *   getStorageKey(key) + localforage —— 原站存储封装（梦角自动涂鸦计时用）
  *
  * 功能：
- *   1) 输入框左侧插入「涂鸦板」按钮 → 打开画布
+ *   1) 入口放在「设置 → 高级功能 → 涂鸦板」→ 打开画布
  *   2) 画笔（6 色 / 3 档粗细）、橡皮、撤销、清空、写字
  *   3) 画完导出 PNG（Base64）→ 复用原站 addMessage({image}) 发到聊天
  *   4) 梦角会按低频随机（首封 6-18 小时，之后 10-30 小时）自动画一张发过来
@@ -601,9 +601,35 @@
         })();
     }
 
-    /* ══════════════════ 六、入口按钮与启动 ══════════════════ */
+    /* ══════════════════ 六、入口与启动 ══════════════════ */
 
-    function ensureButton() {
+    /**
+     * 入口挂在「设置 → 高级功能」的条目列表里，不再占用输入框旁边那排按钮。
+     * 找不到高级功能面板时才回退到输入区，保证功能总能点到。
+     */
+    function ensureEntry() {
+        var box = document.getElementById('advanced-modal');
+        var list = box ? box.querySelector('.settings-item-list') : null;
+
+        var legacy = document.getElementById('doodle-btn');
+        if (legacy) legacy.remove();               // 清掉旧版留在输入区的按钮
+
+        if (list) {
+            if (!document.getElementById('doodle-entry')) {
+                var item = document.createElement('div');
+                item.className = 'settings-item';
+                item.id = 'doodle-entry';
+                item.innerHTML = '<i class="fas fa-paint-brush"></i><span>涂鸦板</span>';
+                item.addEventListener('click', function () {
+                    if (typeof window.hideModal === 'function') window.hideModal(box);   // 关掉高级功能，别叠一起
+                    openBoard();
+                });
+                list.appendChild(item);
+            }
+            return;
+        }
+
+        // 兜底：布局变了也还能用
         if (document.getElementById('doodle-btn')) return;
         var anchor = document.getElementById('attachment-btn');
         if (!anchor || !anchor.parentNode) return;
@@ -617,9 +643,9 @@
     }
 
     function boot() {
-        ensureButton();
+        ensureEntry();
         // 页面结构可能被其它模块重建，轻量重试几次
-        [200, 800, 2400].forEach(function (ms) { setTimeout(ensureButton, ms); });
+        [200, 800, 2400].forEach(function (ms) { setTimeout(ensureEntry, ms); });
 
         setTimeout(checkAutoDoodle, 10000);
         setInterval(checkAutoDoodle, 30 * 60 * 1000);
