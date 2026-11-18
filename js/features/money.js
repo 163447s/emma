@@ -237,13 +237,14 @@
     }
 
     /** 你发出去之后，她过几秒自己收下，并说一句话 */
-    function schedulePartnerClaim(id) {
+    function schedulePartnerClaim(id, delayRange) {
         var m0 = findMsg(id);
         if (!m0) return;
-        var delay = rnd(CLAIM_DELAY[0], CLAIM_DELAY[1]);
+        var r = delayRange || CLAIM_DELAY;
+        var delay = rnd(r[0], r[1]);
         setTimeout(function () {
             var m = findMsg(id);
-            if (!m || !m.money || m.money.status !== 'pending') return;
+            if (!m || !m.money || m.money.status !== 'pending') return;   // 已被收过就跳过（幂等）
             m.money.status = 'claimed';
             m.money.claimedBy = 'partner';
             m.money.claimedAt = Date.now();
@@ -266,16 +267,16 @@
     }
 
     /**
-     * 刷新页面后，之前发出去还没被收的红包要接着等：
-     * 超过 1 分钟的直接安排她收，否则按原节奏补一个计时器。
+     * 刷新页面会清掉 setTimeout，所以每次启动都把所有"还没被收"的红包重新排一遍：
+     * 放了一会儿的（>60 秒）当她马上看到，刚发的按正常节奏；claim 本身是幂等的。
      */
     function resumePendingClaims() {
         var list = (typeof messages !== 'undefined' && messages) ? messages : [];
         var now = Date.now();
         list.forEach(function (m) {
             if (!m || !m.money || m.money.status !== 'pending' || m.sender !== 'user') return;
-            var ts = new Date(m.timestamp).getTime();
-            if (now - ts > 60000) schedulePartnerClaim(m.id);
+            var age = now - new Date(m.timestamp).getTime();
+            schedulePartnerClaim(m.id, age > 60000 ? [3000, 9000] : CLAIM_DELAY);
         });
     }
 
