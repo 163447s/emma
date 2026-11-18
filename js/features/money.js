@@ -98,7 +98,7 @@
             '    <span class="mb-ico"><i class="fas ' + (isRed ? 'fa-gift' : 'fa-exchange-alt') + '"></i></span>' +
             '    <span class="mb-kind">' + (isRed ? '红包' : '转账') + '</span>' +
             '  </div>' +
-            '  <div class="mb-amt"><small>¥</small>' + Number(mo.amount || 0).toFixed(2) + '</div>' +
+            '  <div class="mb-amt">¥' + Number(mo.amount || 0).toFixed(2) + '</div>' +
             '  <div class="mb-note">' + (mo.note ? String(mo.note) : cover) + '</div>' +
             '  <div class="mb-foot"><i class="fas ' + (claimed ? 'fa-check-circle' : 'fa-hand-pointer') + '"></i>' + foot + '</div>' +
             '</div>';
@@ -353,8 +353,7 @@
             '.mb-line{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.95;}',
             '.mb-ico{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);display:flex;',
             'align-items:center;justify-content:center;font-size:11px;}',
-            '.mb-amt{display:flex;align-items:baseline;gap:7px;font-size:24px;font-weight:800;letter-spacing:.5px;margin:7px 0 3px;line-height:1.15;}',
-            '.mb-amt small{flex:none;font-size:13px;font-weight:600;opacity:.92;letter-spacing:0;transform:translateY(-1px);}',
+            '.mb-amt{font-size:24px;font-weight:800;letter-spacing:.3px;margin:7px 0 3px;line-height:1.2;}',
             '.mb-note{font-size:11px;opacity:.9;line-height:1.35;word-break:break-word;}',
             '.mb-foot{font-size:10.5px;opacity:.85;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25);',
             'display:flex;align-items:center;gap:4px;}',
