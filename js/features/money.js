@@ -1,5 +1,5 @@
 /**
- * money.js — 红包 / 转账（双方互通；入口在「设置 → 高级功能」）
+ * money.js — 红包 / 转账（双方互通，支持人民币 / 日元；入口在「设置 → 高级功能」）
  * ------------------------------------------------------------
  * 设计说明：
  * 1) 不新增消息类型，也不改 core.js。红包/转账作为一条 `type:'normal'` 的消息存进
@@ -20,13 +20,21 @@
     var AUTO_LOOP_HOURS = [12, 36];   // 之后：12–36 小时一笔
     var CLAIM_DELAY = [8000, 20000];   // 你发出去的红包，她多久后收（毫秒）
 
-    var QUICK = [5.2, 8.88, 13.14, 52, 131.4];             // 快捷金额
-    var PARTNER_AMOUNTS = [5.2, 8.88, 13.14, 20, 33, 52, 66.6];  // 她发来的金额池
+    // 两种钱：人民币（带小数）和日元（整数，写法 xx 円）
+    var CUR = {
+        cny: { name: '人民币', unit: '元', dec: 2, sign: '¥',
+               quick: [5.2, 8.88, 13.14, 52, 131.4],
+               partner: [5.2, 8.88, 13.14, 20, 33, 52, 66.6] },
+        jpy: { name: '日元', unit: '円', dec: 0, sign: '',
+               quick: [500, 1000, 3000, 5000, 10000],
+               partner: [500, 1000, 2000, 3000, 5200, 10000] }
+    };
     var PARTNER_NOTES = ['给你买点想吃的', '拿着', '上次你请我，这次我请', '零花钱', '别省着'];
     var REPLY_AFTER_RED = ['…收到了', '你自己留着用', '太多了', '谢谢', '下次别给了'];
     var REPLY_AFTER_TRANSFER = ['收到了', '不用给我转', '下次别转了', '钱够用'];
 
     var kind = 'redpacket';           // 当前面板选中的类型
+    var cur = 'cny';                  // 当前面板选中的币种（cny / jpy）
     var state = null;                 // {balance, partner, nextAt, lastAt}
     var modalEl = null;
     var observer = null;
@@ -35,6 +43,14 @@
     function rnd(a, b) { return a + Math.random() * (b - a); }
     function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
     function money(n) { return '¥' + Number(n).toFixed(2); }
+
+    /** 卡片/弹窗上的金额：人民币 ¥12.34，日元 1,000円 */
+    function fmtAmount(mo) {
+        var isJpy = mo && mo.currency === 'jpy';
+        var n = Number((mo && mo.amount) || 0);
+        if (isJpy) return Math.round(n).toLocaleString('en-US') + '円';
+        return '¥' + n.toFixed(2);
+    }
     function chatBox() {
         return (window.DOMElements && DOMElements.chatContainer) || document.querySelector('#chat-container') || document.querySelector('.main-chat-area');
     }
@@ -98,8 +114,7 @@
             '    <span class="mb-ico"><i class="fas ' + (isRed ? 'fa-gift' : 'fa-exchange-alt') + '"></i></span>' +
             '    <span class="mb-kind">' + (isRed ? '红包' : '转账') + '</span>' +
             '  </div>' +
-            '  <div class="mb-amt' + (String(Number(mo.amount || 0).toFixed(2)).length > 8 ? ' mb-amt-sm' : '') + '">¥' +
-            Number(mo.amount || 0).toFixed(2) + '</div>' +
+            '  <div class="mb-amt' + (fmtAmount(mo).length > 9 ? ' mb-amt-sm' : '') + '">' + fmtAmount(mo) + '</div>' +
             '  <div class="mb-note">' + (mo.note ? String(mo.note) : cover) + '</div>' +
             '  <div class="mb-foot"><i class="fas ' + (claimed ? 'fa-check-circle' : 'fa-hand-pointer') + '"></i>' + foot + '</div>' +
             '</div>';
@@ -118,11 +133,13 @@
     function mountOne(wrapper, m) {
         var bubble = wrapper.querySelector('.message');
         if (!bubble) return;
-        if (bubble.dataset.mbAmount === String(m.money.amount) && bubble.dataset.mbStatus === m.money.status) return;
+        if (bubble.dataset.mbAmount === String(m.money.amount) && bubble.dataset.mbStatus === m.money.status &&
+            bubble.dataset.mbCur === String(m.money.currency || 'cny')) return;
         bubble.className = 'message mb-bubble';
         bubble.innerHTML = cardHTML(m);
         bubble.dataset.mbAmount = String(m.money.amount);
         bubble.dataset.mbStatus = m.money.status;
+        bubble.dataset.mbCur = String(m.money.currency || 'cny');
         bubble.onclick = function () { onCardClick(m.id); };
     }
 
@@ -192,7 +209,7 @@
         mask.innerHTML =
             '<div class="mb-claim-card">' +
             '  <div class="mb-claim-ico"><i class="fas ' + (mo.kind === 'transfer' ? 'fa-check' : 'fa-gift') + '"></i></div>' +
-            '  <div class="mb-claim-amt">' + money(mo.amount) + '</div>' +
+            '  <div class="mb-claim-amt">' + fmtAmount(mo) + '</div>' +
             '  <div class="mb-claim-tip">' + (mo.kind === 'transfer' ? '已收进钱包' : '红包已拆开，收进钱包') + '</div>' +
             '  <button class="mb-claim-ok">好</button>' +
             '</div>';
@@ -204,7 +221,7 @@
 
     /* ═══════════════ 五、发出去（我 → Ta） ═══════════════ */
 
-    function sendMoney(amount, note, k) {
+    function sendMoney(amount, note, k, currency) {
         if (!(amount > 0)) { toast('金额得大于 0'); return false; }
         // 不设上限：想发多少就发多少，钱包不扣、不拦
 
@@ -221,6 +238,7 @@
             money: {
                 kind: k || 'redpacket',
                 amount: Number(amount),
+                currency: (currency === 'jpy' ? 'jpy' : 'cny'),
                 note: note || '',
                 status: 'pending',
                 claimedBy: null
@@ -282,8 +300,8 @@
 
     function partnerSend() {
         if (!state) return;
-        var amount = pick(PARTNER_AMOUNTS);
-
+        var c = Math.random() < 0.6 ? 'jpy' : 'cny';          // 她多办用日元
+        var amount = pick(CUR[c].partner);
         var k = Math.random() < 0.7 ? 'redpacket' : 'transfer';
         var msg = {
             id: Date.now() + Math.random(),
@@ -298,6 +316,7 @@
             money: {
                 kind: k,
                 amount: amount,
+                currency: c,
                 note: pick(PARTNER_NOTES),
                 status: 'pending',
                 claimedBy: null
@@ -380,6 +399,11 @@
             '.mb-amount-box span{font-size:20px;font-weight:800;color:#e0442d;}',
             '.mb-amount-box input{flex:1;min-width:0;border:none;outline:none;background:none;font-size:26px;',
             'font-weight:800;color:var(--text-primary,#222);}',
+            '.mb-curs{display:flex;gap:8px;padding:0 16px 10px;}',
+            '.mb-cur{flex:1;padding:8px 0;border-radius:11px;border:1px solid var(--border-color,#e8e8e8);',
+            'background:var(--primary-bg,#fafafa);color:var(--text-secondary,#777);font-size:12.5px;font-weight:600;cursor:pointer;}',
+            '.mb-cur.on{border-color:#e0442d;background:#e0442d;color:#fff;}',
+            '#mb-unit{font-size:12px;font-weight:600;color:var(--text-secondary,#777);flex:none;}',
             '.mb-quick{display:flex;gap:6px;padding:9px 16px 4px;flex-wrap:wrap;}',
             '.mb-chip{padding:6px 10px;border-radius:9px;border:1px solid var(--border-color,#e8e8e8);',
             'background:var(--primary-bg,#fafafa);color:var(--text-secondary,#777);font-size:11.5px;cursor:pointer;}',
@@ -393,6 +417,43 @@
             /* 高级功能里的条目沿用原站 .settings-item 样式，无需额外规则 */
         ].join('');
         document.head.appendChild(st);
+    }
+
+    /** 快捷金额随币种重建（人民币带小数，日元是整数） */
+    function renderQuick() {
+        var quickBox = document.getElementById('mb-quick');
+        if (!quickBox) return;
+        quickBox.innerHTML = '';
+        CUR[cur].quick.forEach(function (v) {
+            var b = document.createElement('button');
+            b.className = 'mb-chip';
+            b.textContent = cur === 'jpy' ? v.toLocaleString('en-US') : v.toFixed(2).replace(/\.00$/, '');
+            b.addEventListener('click', function () {
+                document.getElementById('mb-amount').value = String(v);
+            });
+            quickBox.appendChild(b);
+        });
+    }
+
+    /** 切换币种：符号、单位、步进、快捷金额一起变 */
+    function setCurrency(c) {
+        cur = (c === 'jpy') ? 'jpy' : 'cny';
+        var cf = CUR[cur];
+        var sign = document.getElementById('mb-sign');
+        var unit = document.getElementById('mb-unit');
+        var amt = document.getElementById('mb-amount');
+        var bCny = document.getElementById('mb-cur-cny');
+        var bJpy = document.getElementById('mb-cur-jpy');
+        if (sign) sign.textContent = cf.sign;
+        if (unit) unit.textContent = cf.unit;
+        if (amt) {
+            amt.step = cf.dec ? '0.01' : '1';
+            amt.placeholder = cf.dec ? '0.00' : '0';
+            amt.value = '';
+        }
+        if (bCny) bCny.classList.toggle('on', cur === 'cny');
+        if (bJpy) bJpy.classList.toggle('on', cur === 'jpy');
+        renderQuick();
     }
 
     /** 面板只做一件事：要么发红包，要么转账，由「高级功能」里的入口决定 */
@@ -421,7 +482,11 @@
             '    <button class="mb-close" id="mb-close" title="关闭"><i class="fas fa-times"></i></button>',
             '  </div>',
             '  <div class="mb-wallet"><span>Ta 给过你</span><b id="mb-balance">¥0.00</b></div>',
-            '  <div class="mb-amount-box"><span>¥</span><input id="mb-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>',
+            '  <div class="mb-curs">',
+            '    <button class="mb-cur on" id="mb-cur-cny">人民币</button>',
+            '    <button class="mb-cur" id="mb-cur-jpy">日元</button>',
+            '  </div>',
+            '  <div class="mb-amount-box"><span id="mb-sign">¥</span><input id="mb-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"><span id="mb-unit">元</span></div>',
             '  <div class="mb-quick" id="mb-quick"></div>',
             '  <input class="mb-note-input" id="mb-note" maxlength="18" placeholder="留句话（可不填）">',
             '  <div class="mb-actions">',
@@ -432,17 +497,10 @@
         ].join('');
         document.body.appendChild(modalEl);
 
-        // 快捷金额
-        var quickBox = document.getElementById('mb-quick');
-        QUICK.forEach(function (v) {
-            var b = document.createElement('button');
-            b.className = 'mb-chip';
-            b.textContent = v.toFixed(2).replace(/\.00$/, '');
-            b.addEventListener('click', function () {
-                document.getElementById('mb-amount').value = String(v);
-            });
-            quickBox.appendChild(b);
-        });
+        // 币种切换：人民币 / 日元
+        document.getElementById('mb-cur-cny').addEventListener('click', function () { setCurrency('cny'); });
+        document.getElementById('mb-cur-jpy').addEventListener('click', function () { setCurrency('jpy'); });
+        setCurrency(cur);
 
         var doBtn = document.getElementById('mb-do');
 
@@ -452,7 +510,7 @@
         doBtn.addEventListener('click', function () {
             var amt = parseFloat(document.getElementById('mb-amount').value);   // 不限额度，填多少发多少
             var note = (document.getElementById('mb-note').value || '').trim();
-            if (sendMoney(amt, note, kind)) {
+            if (sendMoney(amt, note, kind, cur)) {
                 document.getElementById('mb-amount').value = '';
                 document.getElementById('mb-note').value = '';
                 closePanel();
