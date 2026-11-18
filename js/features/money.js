@@ -517,6 +517,7 @@
     /* ═══════════════ 十、启动 ═══════════════ */
 
     function boot() {
+        injectStyle();                                    // 先注入样式：卡片不依赖面板是否打开过
         loadState().then(function () {
             insertButton();
             watchRender();
