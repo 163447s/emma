@@ -1,5 +1,5 @@
 /**
- * money.js — 红包 / 转账（双方互通）
+ * money.js — 红包 / 转账（双方互通；入口在「设置 → 高级功能」）
  * ------------------------------------------------------------
  * 设计说明：
  * 1) 不新增消息类型，也不改 core.js。红包/转账作为一条 `type:'normal'` 的消息存进
@@ -380,10 +380,6 @@
             '.mb-wallet{margin:0 16px 10px;padding:9px 12px;border-radius:12px;background:var(--primary-bg,#f6f4f1);',
             'font-size:12px;color:var(--text-secondary,#777);display:flex;justify-content:space-between;}',
             '.mb-wallet b{color:#e0442d;font-size:14px;}',
-            '.mb-tabs{display:flex;gap:8px;padding:0 16px 10px;}',
-            '.mb-tab{flex:1;padding:9px 0;border-radius:11px;border:1px solid var(--border-color,#e8e8e8);',
-            'background:var(--primary-bg,#fafafa);color:var(--text-secondary,#777);font-size:12.5px;font-weight:600;cursor:pointer;}',
-            '.mb-tab.on{border-color:#e0442d;background:#e0442d;color:#fff;}',
             '.mb-amount-box{margin:0 16px;padding:12px 14px;border-radius:14px;border:1px solid var(--border-color,#eee);',
             'display:flex;align-items:center;gap:6px;}',
             '.mb-amount-box span{font-size:20px;font-weight:800;color:#e0442d;}',
@@ -399,10 +395,22 @@
             '.mb-actions button{flex:1;padding:11px 0;border-radius:12px;border:none;font-size:13px;font-weight:600;cursor:pointer;}',
             '.mb-cancel{background:var(--primary-bg,#f2f2f2);color:var(--text-secondary,#777);border:1px solid var(--border-color,#e5e5e5)!important;}',
             '.mb-do{background:#e0442d;color:#fff;}',
-            /* 输入区按钮 */
-            '#money-btn{position:relative;}'
+            /* 高级功能里的条目沿用原站 .settings-item 样式，无需额外规则 */
         ].join('');
         document.head.appendChild(st);
+    }
+
+    /** 面板只做一件事：要么发红包，要么转账，由「高级功能」里的入口决定 */
+    function setKind(k) {
+        kind = (k === 'transfer') ? 'transfer' : 'redpacket';
+        var t = document.getElementById('mb-title-text');
+        var ico = document.getElementById('mb-title-ico');
+        var doBtn = document.getElementById('mb-do');
+        var note = document.getElementById('mb-note');
+        if (t) t.textContent = kind === 'transfer' ? '转账' : '发红包';
+        if (ico) ico.className = 'fas ' + (kind === 'transfer' ? 'fa-exchange-alt' : 'fa-gift');
+        if (doBtn) doBtn.textContent = kind === 'transfer' ? '转账' : '塞进红包';
+        if (note) note.placeholder = kind === 'transfer' ? '备注（可不填）' : '留句话（可不填）';
     }
 
     function buildPanel() {
@@ -414,14 +422,10 @@
         modalEl.innerHTML = [
             '<div class="mb-panel">',
             '  <div class="mb-head">',
-            '    <div class="mb-title"><i class="fas fa-coins"></i>红包 / 转账</div>',
+            '    <div class="mb-title"><i class="fas fa-gift" id="mb-title-ico"></i><span id="mb-title-text">发红包</span></div>',
             '    <button class="mb-close" id="mb-close" title="关闭"><i class="fas fa-times"></i></button>',
             '  </div>',
             '  <div class="mb-wallet"><span>我的钱包</span><b id="mb-balance">¥0.00</b></div>',
-            '  <div class="mb-tabs">',
-            '    <button class="mb-tab on" id="mb-tab-red">红包</button>',
-            '    <button class="mb-tab" id="mb-tab-transfer">转账</button>',
-            '  </div>',
             '  <div class="mb-amount-box"><span>¥</span><input id="mb-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>',
             '  <div class="mb-quick" id="mb-quick"></div>',
             '  <input class="mb-note-input" id="mb-note" maxlength="18" placeholder="留句话（可不填）">',
@@ -445,18 +449,7 @@
             quickBox.appendChild(b);
         });
 
-        // 类型切换
-        var tabRed = document.getElementById('mb-tab-red');
-        var tabTr = document.getElementById('mb-tab-transfer');
         var doBtn = document.getElementById('mb-do');
-        function setKind(k) {
-            kind = k;
-            tabRed.classList.toggle('on', k === 'redpacket');
-            tabTr.classList.toggle('on', k === 'transfer');
-            doBtn.textContent = k === 'redpacket' ? '塞进红包' : '转账';
-        }
-        tabRed.addEventListener('click', function () { setKind('redpacket'); });
-        tabTr.addEventListener('click', function () { setKind('transfer'); });
 
         document.getElementById('mb-close').addEventListener('click', closePanel);
         document.getElementById('mb-cancel').addEventListener('click', closePanel);
@@ -478,8 +471,9 @@
         if (el && state) el.textContent = money(state.balance);
     }
 
-    function openPanel() {
+    function openPanel(k) {
         buildPanel();
+        setKind(k);
         refreshBalance();
         if (typeof window.showModal === 'function') { try { window.showModal(modalEl); } catch (e) {} }
         modalEl.style.display = 'flex';       // 放在 showModal 之后，确保不被它覆盖
@@ -500,21 +494,36 @@
         modalEl.style.opacity = '';
     }
 
-    /* ═══════════════ 八、入口按钮 ═══════════════ */
+    /* ═══════════════ 八、入口（设置 → 高级功能） ═══════════════ */
 
-    function insertButton() {
-        var anchor = document.getElementById('doodle-btn') || document.getElementById('attachment-btn');
-        if (!anchor || document.getElementById('money-btn')) return;
-        var btn = document.createElement('button');
-        btn.id = 'money-btn';
-        btn.className = 'attachment-btn input-btn collapse-hideable';
-        btn.title = '红包 / 转账';
-        btn.innerHTML = '<i class="fas fa-coins"></i>';
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            openPanel();
-        });
-        anchor.parentNode.insertBefore(btn, anchor.nextSibling);
+    /**
+     * 红包和转账各占一条，放在「设置 → 高级功能」的条目列表里；
+     * 不再占用输入框旁边那排按钮（那里的位置留给常用操作）。
+     */
+    function ensureEntries() {
+        var box = document.getElementById('advanced-modal');
+        var list = box ? box.querySelector('.settings-item-list') : null;
+
+        // 清掉旧版留在输入区的按钮
+        var legacy = document.getElementById('money-btn');
+        if (legacy) legacy.remove();
+
+        if (!list) return;      // 面板还没出来，下次重试时会补上
+
+        function addItem(id, icon, label, handler) {
+            if (document.getElementById(id)) return;
+            var item = document.createElement('div');
+            item.className = 'settings-item';
+            item.id = id;
+            item.innerHTML = '<i class="fas ' + icon + '"></i><span>' + label + '</span>';
+            item.addEventListener('click', function () {
+                if (typeof window.hideModal === 'function') window.hideModal(box);   // 先关高级功能，再弹面板
+                handler();
+            });
+            list.appendChild(item);
+        }
+        addItem('money-red-entry', 'fa-gift', '发红包', function () { openPanel('redpacket'); });
+        addItem('money-transfer-entry', 'fa-exchange-alt', '转账', function () { openPanel('transfer'); });
     }
 
     /* ═══════════════ 九、小提示 ═══════════════ */
@@ -534,7 +543,7 @@
     function boot() {
         injectStyle();                                    // 先注入样式：卡片不依赖面板是否打开过
         loadState().then(function () {
-            insertButton();
+            ensureEntries();
             watchRender();
             mountAll();
             refreshBalance();
@@ -550,13 +559,15 @@
         setTimeout(boot, 800);
     }
 
-    // 按钮可能因为输入区重建而消失，补几次
-    setTimeout(insertButton, 200);
-    setTimeout(insertButton, 1200);
-    setTimeout(insertButton, 3000);
+    // 高级功能面板结构可能晚于本脚本就绪，补几次
+    setTimeout(ensureEntries, 200);
+    setTimeout(ensureEntries, 1200);
+    setTimeout(ensureEntries, 3000);
 
     window.MoneyBox = {
-        open: openPanel,
+        open: function () { openPanel('redpacket'); },
+        openRed: function () { openPanel('redpacket'); },
+        openTransfer: function () { openPanel('transfer'); },
         close: closePanel,
         send: sendMoney,
         partnerSend: partnerSend,       // 手动让她发一笔（测试用）
