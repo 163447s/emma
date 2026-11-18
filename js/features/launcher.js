@@ -59,7 +59,7 @@
 ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 
 #cx-home {
-  position: fixed; inset: 0; z-index: 3000;
+  position: fixed; inset: 0; z-index: 1000;
   background: radial-gradient(120% 80% at 50% 0%, #fff9f2 0%, #fbf7f2 58%, #f6efe6 100%);
   display: flex; align-items: center; justify-content: center;
   padding: max(22px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
@@ -197,11 +197,17 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 
   /* ── 显示 / 隐藏 ── */
 
-  function showHome() {
+  function showHome(keepMode) {
     if (!homeEl) build();
-    mode = 'home';
+    if (!keepMode) mode = 'home';
     homeEl.classList.remove('cx-hide');
     fabEl.classList.remove('cx-on');
+    // 首页上不该挂着「关于 & 声明」那个弹窗
+    try {
+      const disc = document.getElementById('disclaimer-modal');
+      if (disc && getComputedStyle(disc).display !== 'none' && typeof hideModal === 'function') hideModal(disc);
+    } catch (e) {}
+
   }
 
   function hideHome() {
@@ -220,7 +226,7 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 
     if (key === 'chuan') {
       mode = 'feature';
-      hideHome();
+      showHome(true);
       if (window.Chuanxun && typeof window.Chuanxun.open === 'function') {
         window.Chuanxun.open();
       } else {
@@ -240,7 +246,7 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
     if (!target) { toast('这个功能还没加载好'); return; }
 
     mode = 'feature';
-    hideHome();
+    showHome(true);
     setTimeout(() => {
       try { target.click(); } catch (e) { console.warn('[launcher]', e); showHome(); }
     }, 80);
