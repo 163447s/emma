@@ -98,7 +98,8 @@
             '    <span class="mb-ico"><i class="fas ' + (isRed ? 'fa-gift' : 'fa-exchange-alt') + '"></i></span>' +
             '    <span class="mb-kind">' + (isRed ? '红包' : '转账') + '</span>' +
             '  </div>' +
-            '  <div class="mb-amt">¥' + Number(mo.amount || 0).toFixed(2) + '</div>' +
+            '  <div class="mb-amt' + (String(Number(mo.amount || 0).toFixed(2)).length > 8 ? ' mb-amt-sm' : '') + '">¥' +
+            Number(mo.amount || 0).toFixed(2) + '</div>' +
             '  <div class="mb-note">' + (mo.note ? String(mo.note) : cover) + '</div>' +
             '  <div class="mb-foot"><i class="fas ' + (claimed ? 'fa-check-circle' : 'fa-hand-pointer') + '"></i>' + foot + '</div>' +
             '</div>';
@@ -205,10 +206,7 @@
 
     function sendMoney(amount, note, k) {
         if (!(amount > 0)) { toast('金额得大于 0'); return false; }
-        if (amount > Number(state.balance)) { toast('钱包不够了，只剩 ' + money(state.balance)); return false; }
-
-        state.balance = Number(state.balance) - amount;
-        saveState();
+        // 不设上限：想发多少就发多少，钱包不扣、不拦
 
         var msg = {
             id: Date.now() + Math.random(),
@@ -285,10 +283,6 @@
     function partnerSend() {
         if (!state) return;
         var amount = pick(PARTNER_AMOUNTS);
-        if (amount > state.partner) amount = Math.min(amount, state.partner);
-        if (!(amount > 0)) return;
-        state.partner = Number(state.partner) - amount;
-        saveState();
 
         var k = Math.random() < 0.7 ? 'redpacket' : 'transfer';
         var msg = {
@@ -355,6 +349,7 @@
             '.mb-ico{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);display:flex;',
             'align-items:center;justify-content:center;font-size:11px;}',
             '.mb-amt{font-size:24px;font-weight:800;letter-spacing:.3px;margin:7px 0 3px;line-height:1.2;}',
+            '.mb-amt.mb-amt-sm{font-size:17px;}',
             '.mb-note{font-size:11px;opacity:.9;line-height:1.35;word-break:break-word;}',
             '.mb-foot{font-size:10.5px;opacity:.85;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25);',
             'display:flex;align-items:center;gap:4px;}',
@@ -425,7 +420,7 @@
             '    <div class="mb-title"><i class="fas fa-gift" id="mb-title-ico"></i><span id="mb-title-text">发红包</span></div>',
             '    <button class="mb-close" id="mb-close" title="关闭"><i class="fas fa-times"></i></button>',
             '  </div>',
-            '  <div class="mb-wallet"><span>我的钱包</span><b id="mb-balance">¥0.00</b></div>',
+            '  <div class="mb-wallet"><span>Ta 给过你</span><b id="mb-balance">¥0.00</b></div>',
             '  <div class="mb-amount-box"><span>¥</span><input id="mb-amount" type="number" inputmode="decimal" step="0.01" placeholder="0.00"></div>',
             '  <div class="mb-quick" id="mb-quick"></div>',
             '  <input class="mb-note-input" id="mb-note" maxlength="18" placeholder="留句话（可不填）">',
@@ -455,7 +450,7 @@
         document.getElementById('mb-cancel').addEventListener('click', closePanel);
         modalEl.addEventListener('click', function (e) { if (e.target === modalEl) closePanel(); });
         doBtn.addEventListener('click', function () {
-            var amt = parseFloat(document.getElementById('mb-amount').value);
+            var amt = parseFloat(document.getElementById('mb-amount').value);   // 不限额度，填多少发多少
             var note = (document.getElementById('mb-note').value || '').trim();
             if (sendMoney(amt, note, kind)) {
                 document.getElementById('mb-amount').value = '';
