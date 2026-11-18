@@ -353,8 +353,8 @@
             '.mb-line{display:flex;align-items:center;gap:6px;font-size:12px;opacity:.95;}',
             '.mb-ico{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.22);display:flex;',
             'align-items:center;justify-content:center;font-size:11px;}',
-            '.mb-amt{display:flex;align-items:baseline;gap:5px;font-size:24px;font-weight:800;letter-spacing:.5px;margin:7px 0 3px;line-height:1.15;}',
-            '.mb-amt small{flex:none;font-size:13px;font-weight:600;opacity:.9;letter-spacing:0;}',
+            '.mb-amt{display:flex;align-items:baseline;gap:7px;font-size:24px;font-weight:800;letter-spacing:.5px;margin:7px 0 3px;line-height:1.15;}',
+            '.mb-amt small{flex:none;font-size:13px;font-weight:600;opacity:.92;letter-spacing:0;transform:translateY(-1px);}',
             '.mb-note{font-size:11px;opacity:.9;line-height:1.35;word-break:break-word;}',
             '.mb-foot{font-size:10.5px;opacity:.85;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.25);',
             'display:flex;align-items:center;gap:4px;}',
@@ -481,12 +481,12 @@
     function openPanel() {
         buildPanel();
         refreshBalance();
-        modalEl.style.display = 'flex';
-        modalEl.style.animation = 'none';       // 不依赖原站弹窗动画，避免被节流卡在 opacity:0
+        if (typeof window.showModal === 'function') { try { window.showModal(modalEl); } catch (e) {} }
+        modalEl.style.display = 'flex';       // 放在 showModal 之后，确保不被它覆盖
+        modalEl.style.animation = 'none';     // 不依赖原站弹窗动画，避免被节流卡在 opacity:0
         modalEl.style.opacity = '1';
         var p = modalEl.querySelector('.mb-panel');
         if (p) { p.style.opacity = '1'; p.style.transform = 'none'; }
-        if (typeof window.showModal === 'function') window.showModal(modalEl);
         setTimeout(function () {
             var a = document.getElementById('mb-amount');
             if (a && window.innerWidth > 640) a.focus();
@@ -495,8 +495,9 @@
 
     function closePanel() {
         if (!modalEl) return;
-        if (typeof window.hideModal === 'function') window.hideModal(modalEl);
-        else modalEl.style.display = 'none';
+        if (typeof window.hideModal === 'function') { try { window.hideModal(modalEl); } catch (e) {} }
+        modalEl.style.display = 'none';        // hideModal 未必管我们自绘的弹窗，这里兜底
+        modalEl.style.opacity = '';
     }
 
     /* ═══════════════ 八、入口按钮 ═══════════════ */
