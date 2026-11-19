@@ -1,25 +1,27 @@
 /* ════════════════════════════════════════════════
-   朋友圈（Moments）
-   你和梦角都能发，数据只存在本机浏览器。
-   - 你：文字 + 最多 3 张图（自动压到 720px，存 base64）
-   - 梦角：自己随机发（日语原句 + 一行小字中文），也会给你点赞
-   - 不依赖原站任何函数，纯前端扩展
+   朋友圈（Moments）· 微信朋友圈样式
+   - 顶部封面：跟聊天页背景是同一份（改这边聊天页也变，反之亦然）
+   - 头像 / 名字：直接用聊天页那一份，点一下就能改
+   - 你：文字 + 最多 3 张图；梦角：字卡为主，偶尔 AI 现写一句
+   - 纯前端扩展，不动原站任何逻辑
    ════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
   var KEY = 'cx_moments_v1';       // 全部动态
-  var MAX_KEEP = 120;              // 最多留 120 条，超了丢最旧的
+  var MAX_KEEP = 120;              // 最多留 120 条
   var MAX_IMG = 3;                 // 一条最多 3 张图
-  var IMG_MAX_W = 720;             // 图片最长边
-  var IMG_Q = 0.62;                // JPEG 质量
+  var IMG_MAX_W = 720;             // 动态图片最长边
+  var BG_MAX_W = 1600;             // 背景图最长边
+  var IMG_Q = 0.62;
 
-  var el = { root: null, list: null, scroller: null, input: null, imgs: null, overlay: null };
+  var el = { root: null, list: null, scroller: null, feed: null, cover: null,
+             input: null, imgs: null, overlay: null, bgSheet: null, bgInput: null };
   var built = false;
-  var picked = [];                 // 待发布的图片（base64 数组）
+  var picked = [];
   var busy = false;
 
-  /* ── 名字 ── */
+  /* ── 名字 / 头像：跟聊天页共用同一份 ── */
   function names() {
     var s = {};
     try { if (typeof settings !== 'undefined' && settings) s = settings; } catch (e) {}
@@ -31,25 +33,22 @@
     };
   }
 
-  /* 头像直接用聊天页那个（同一份数据，改一边两边都变） */
   function avatarOf(who) {
-    var el = document.getElementById(who === 'mj' ? 'partner-avatar' : 'my-avatar');
-    var img = el && el.querySelector('img');
+    var node = document.getElementById(who === 'mj' ? 'partner-avatar' : 'my-avatar');
+    var img = node && node.querySelector('img');
     return img ? img.src : null;
   }
 
-  /* 点头像 / 名字 → 打开原站自己的编辑弹窗（改完自动同步） */
   function openEditor(what, who) {
     var id = what === 'ava'
       ? (who === 'mj' ? 'partner-avatar' : 'my-avatar')
       : (who === 'mj' ? 'partner-name' : 'my-name');
-    var el = document.getElementById(id);
-    if (!el) { toast('聊天那边还没准备好，先回聊天页一次'); return; }
-    try { el.click(); } catch (e) { toast('打不开设置'); return; }
+    var node = document.getElementById(id);
+    if (!node) { toast('聊天那边还没准备好，先回聊天页一次'); return; }
+    try { node.click(); } catch (e) { toast('打不开设置'); return; }
     watchEditor();
   }
 
-  /* 等编辑弹窗关掉，再把朋友圈重画一遍（名字/头像就跟着变了） */
   function watchEditor() {
     var opened = false, t0 = Date.now();
     var timer = setInterval(function () {
@@ -62,6 +61,51 @@
       if (opened && !vis) { clearInterval(timer); render(); }
       if (!opened && Date.now() - t0 > 3000) { clearInterval(timer); render(); }
     }, 300);
+  }
+
+  /* ── 背景：就是聊天页那张（CSS 变量 --chat-bg-image） ── */
+  function currentBg() {
+    try {
+      return (getComputedStyle(document.documentElement).getPropertyValue('--chat-bg-image') || '').trim();
+    } catch (e) { return ''; }
+  }
+
+  /* 拼聊天背景的存储键（原站 getStorageKey 在闭包里拿不到，按同样规则拼） */
+  function bgKey() {
+    try {
+      if (typeof APP_PREFIX !== 'undefined' && typeof SESSION_ID !== 'undefined' && SESSION_ID) {
+        return APP_PREFIX + SESSION_ID + '_chatBackground';
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  /* 写背景 → 聊天页和朋友圈同时生效 */
+  function setChatBg(value) {
+    var root = document.documentElement;
+    var k = bgKey();
+
+    if (!value) {
+      root.style.removeProperty('--chat-bg-image');
+      document.body.classList.remove('with-background');
+      if (k) {
+        try { localStorage.removeItem(k); } catch (e) {}
+        try { localforage.removeItem(k); } catch (e) {}
+      }
+      renderCover();
+      return;
+    }
+
+    var isColor = /^(#|rgb|hsl)/.test(value);
+    var css = isColor ? value : (/^url\(/.test(value) ? value : 'url(' + value + ')');
+    root.style.setProperty('--chat-bg-image', css);
+    document.body.classList.add('with-background');
+
+    if (k) {
+      try { localStorage.setItem(k, value); } catch (e) {}
+      try { localforage.setItem(k, value); } catch (e) {}
+    }
+    renderCover();
   }
 
   /* ── 存取 ── */
@@ -78,7 +122,6 @@
       localStorage.setItem(KEY, JSON.stringify(list));
       return true;
     } catch (e) {
-      // 存不下了（多半是图太多）：砍掉后面一半再试一次
       var half = list.slice(0, Math.max(10, Math.floor(list.length / 2)));
       try { localStorage.setItem(KEY, JSON.stringify(half)); } catch (e2) {}
       toast('本地空间不够，旧的几条先清掉了');
@@ -128,7 +171,6 @@
     '就这样过着，也挺好。'
   ];
 
-  /* ── 字卡库：优先用「自定义回复」里你囤的那些 ── */
   function cardsPool() {
     try {
       var arr = window._customReplies;
@@ -141,7 +183,9 @@
   }
 
   /* ── 图片压缩 ── */
-  function compress(file) {
+  function compress(file, maxW, quality) {
+    maxW = maxW || IMG_MAX_W;
+    quality = quality || IMG_Q;
     return new Promise(function (resolve, reject) {
       var fr = new FileReader();
       fr.onload = function () {
@@ -149,15 +193,15 @@
         img.onload = function () {
           var w = img.width || 1, h = img.height || 1;
           var max = Math.max(w, h);
-          if (max > IMG_MAX_W) {
-            var r = IMG_MAX_W / max;
+          if (max > maxW) {
+            var r = maxW / max;
             w = Math.round(w * r);
             h = Math.round(h * r);
           }
           var c = document.createElement('canvas');
           c.width = w; c.height = h;
           c.getContext('2d').drawImage(img, 0, 0, w, h);
-          try { resolve(c.toDataURL('image/jpeg', IMG_Q)); }
+          try { resolve(c.toDataURL('image/jpeg', quality)); }
           catch (e) { reject(e); }
         };
         img.onerror = reject;
@@ -168,58 +212,90 @@
     });
   }
 
-  /* ── 渲染 ── */
+  /* ── 渲染：封面 ── */
+  function renderCover() {
+    if (!el.cover) return;
+    var n = names();
+    var bg = currentBg();
+
+    el.cover.style.background = '';
+    el.cover.style.backgroundImage = '';
+    el.cover.classList.remove('cxm-cover-default');
+
+    if (!bg) {
+      el.cover.classList.add('cxm-cover-default');
+    } else if (/^(#|rgb|hsl)/.test(bg)) {
+      el.cover.style.background = bg;
+    } else {
+      el.cover.style.backgroundImage = bg;
+      el.cover.style.backgroundSize = 'cover';
+      el.cover.style.backgroundPosition = 'center';
+      el.cover.style.backgroundRepeat = 'no-repeat';
+    }
+
+    var nameEl = el.cover.querySelector('.cxm-me-name');
+    if (nameEl) nameEl.textContent = n.me;
+
+    var avaEl = el.cover.querySelector('.cxm-me-ava');
+    if (avaEl) {
+      var src = avatarOf('me');
+      avaEl.innerHTML = src ? '<img src="' + src + '" alt="">' : esc(n.me.slice(0, 1));
+    }
+  }
+
+  /* ── 渲染：动态列表 ── */
   function render() {
+    renderCover();
+    if (!el.feed) return;
+
     var n = names();
     var list = load();
 
     if (!list.length) {
-      el.list.innerHTML = '<div class="cxm-empty"><i class="far fa-image"></i><p>还没有动态</p><span>发第一条，等 TA 看见</span></div>';
+      el.feed.innerHTML = '<div class="cxm-empty"><i class="far fa-image"></i><p>还没有动态</p><span>发第一条，等 TA 看见</span></div>';
       return;
     }
 
     var html = list.map(function (p) {
       var isMJ = p.who === 'mj';
       var name = isMJ ? n.mj : n.me;
-      var initial = (name || '?').slice(0, 1);
-      var imgs = (p.imgs && p.imgs.length)
-        ? '<div class="cxm-pics">' + p.imgs.map(function (src) {
-            return '<img src="' + src + '" data-full="1" alt="">';
-          }).join('') + '</div>'
-        : '';
+      var avaSrc = avatarOf(p.who);
+      var pics = '';
+      if (p.imgs && p.imgs.length) {
+        pics = '<div class="cxm-pics' + (p.imgs.length === 1 ? ' one' : '') + '">' +
+          p.imgs.map(function (src) { return '<img src="' + src + '" alt="">'; }).join('') +
+        '</div>';
+      }
       var body = '';
       if (p.card) {
         body = '<div class="cxm-card"><span class="cxm-card-mark">“</span><p>' + esc(p.text) + '</p><span class="cxm-card-seal">伝</span></div>';
       } else if (p.text) {
         body = '<div class="cxm-text">' + esc(p.text) + '</div>';
       }
-      var likeCls = p.liked ? 'cxm-like on' : 'cxm-like';
-      var heart = p.liked ? 'fas fa-heart' : 'far fa-heart';
-      var likes = p.likes ? p.likes : 0;
+      var liked = p.liked;
+      var likes = p.likes || 0;
 
       return '' +
-        '<article class="cxm-post" data-id="' + p.id + '">' +
-          '<div class="cxm-headrow">' +
-            '<span class="cxm-ava' + (isMJ ? ' mj' : '') + '" data-edit="ava" data-who="' + (isMJ ? 'mj' : 'me') + '">' +
-              (avatarOf(p.who) ? '<img src="' + avatarOf(p.who) + '" alt="">' : esc(initial)) +
-            '</span>' +
-            '<span class="cxm-who">' +
-              '<span class="cxm-name" data-edit="name" data-who="' + (isMJ ? 'mj' : 'me') + '">' + esc(name) + '</span>' +
+        '<article class="cxm-item" data-id="' + p.id + '">' +
+          '<span class="cxm-ava" data-edit="ava" data-who="' + (isMJ ? 'mj' : 'me') + '">' +
+            (avaSrc ? '<img src="' + avaSrc + '" alt="">' : esc(name.slice(0, 1))) +
+          '</span>' +
+          '<div class="cxm-main">' +
+            '<span class="cxm-name" data-edit="name" data-who="' + (isMJ ? 'mj' : 'me') + '">' + esc(name) + '</span>' +
+            body + pics +
+            '<div class="cxm-row">' +
               '<span class="cxm-time">' + ago(p.ts) + '</span>' +
-            '</span>' +
-            '<button class="cxm-del" data-del="1" title="删除"><i class="fas fa-times"></i></button>' +
-          '</div>' +
-          body +
-          imgs +
-          '<div class="cxm-foot">' +
-            '<button class="' + likeCls + '" data-like="1">' +
-              '<i class="' + heart + '"></i><span>' + (likes ? likes : '') + '</span>' +
-            '</button>' +
+              '<button class="cxm-del" data-del="1" title="删除"><i class="fas fa-times"></i></button>' +
+              '<button class="cxm-like' + (liked ? ' on' : '') + '" data-like="1">' +
+                '<i class="' + (liked ? 'fas fa-heart' : 'far fa-heart') + '"></i>' +
+                (likes ? '<span>' + likes + '</span>' : '') +
+              '</button>' +
+            '</div>' +
           '</div>' +
         '</article>';
     }).join('');
 
-    el.list.innerHTML = html;
+    el.feed.innerHTML = html;
   }
 
   function esc(s) {
@@ -228,7 +304,7 @@
       .replace(/"/g, '&quot;').replace(/\n/g, '<br>');
   }
 
-  /* ── 点赞 / 删除 ── */
+  /* ── 点击：改头像/名字、换封面、点赞、删除 ── */
   function onListClick(e) {
     var editEl = e.target.closest ? e.target.closest('[data-edit]') : null;
     if (editEl) {
@@ -236,11 +312,15 @@
       return;
     }
 
-    var likeBtn = e.target.closest ? e.target.closest('[data-like]') : null;
-    var delBtn = e.target.closest ? e.target.closest('[data-del]') : null;
+    // 点封面空白处 → 换背景
+    if (e.target.closest && e.target.closest('[data-cover]')) {
+      openBg();
+      return;
+    }
 
+    var likeBtn = e.target.closest ? e.target.closest('[data-like]') : null;
     if (likeBtn) {
-      var post = likeBtn.closest('.cxm-post');
+      var post = likeBtn.closest('.cxm-item');
       var id = post && post.getAttribute('data-id');
       var list = load();
       for (var i = 0; i < list.length; i++) {
@@ -255,14 +335,20 @@
       return;
     }
 
+    var delBtn = e.target.closest ? e.target.closest('[data-del]') : null;
     if (delBtn) {
-      var p2 = delBtn.closest('.cxm-post');
+      var p2 = delBtn.closest('.cxm-item');
       var id2 = p2 && p2.getAttribute('data-id');
       if (!id2) return;
       if (!confirm('删掉这条动态？')) return;
-      var l2 = load().filter(function (x) { return x.id !== id2; });
-      save(l2);
+      save(load().filter(function (x) { return x.id !== id2; }));
       render();
+      return;
+    }
+
+    if (e.target && e.target.tagName === 'IMG' && e.target.closest('.cxm-pics')) {
+      var v = document.getElementById('cxm-viewer');
+      if (v) { v.querySelector('img').src = e.target.src; v.classList.add('on'); }
     }
   }
 
@@ -275,13 +361,8 @@
     busy = true;
     var list = load();
     list.unshift({
-      id: uid(),
-      who: 'me',
-      text: text,
-      imgs: picked.slice(),
-      ts: Date.now(),
-      likes: 0,
-      liked: false
+      id: uid(), who: 'me', text: text, imgs: picked.slice(),
+      ts: Date.now(), likes: 0, liked: false
     });
     save(list);
 
@@ -296,7 +377,6 @@
     reactAfterPublish();
   }
 
-  /* 你发完，TA 的反应：点赞 / 自己也发一条 */
   function reactAfterPublish() {
     setTimeout(function () {
       if (Math.random() < 0.5) mjLikeMine();
@@ -319,7 +399,6 @@
     }
   }
 
-  /* 抽一张字卡当动态 */
   function cardPost() {
     var pool = cardsPool();
     var pick = pool[Math.floor(Math.random() * pool.length)] || '';
@@ -330,20 +409,14 @@
     if (!data || !data.text) return;
     var list = load();
     list.unshift({
-      id: uid(),
-      who: 'mj',
-      text: data.text,
-      card: !!data.card,
-      imgs: [],
-      ts: Date.now(),
-      likes: 0,
-      liked: false
+      id: uid(), who: 'mj', text: data.text, card: !!data.card,
+      imgs: [], ts: Date.now(), likes: 0, liked: false
     });
     save(list);
     render();
   }
 
-  /* 让 TA 发一条：kind = 'card'（抽字卡）| 'ai'（现场写一句，失败就退回字卡） */
+  /* kind = 'card'（抽字卡）| 'ai'（现场写一句，失败退回字卡） */
   function mjPost(kind) {
     if (kind !== 'ai') { pushMJ(cardPost()); return; }
     aiMoment().then(function (text) {
@@ -351,8 +424,7 @@
     });
   }
 
-  /* ── AI：接着最近的动态写一句 ── */
-
+  /* ── AI ── */
   function aiCfg() {
     try {
       var c = JSON.parse(localStorage.getItem('cx_chuan_cfg') || '{}') || {};
@@ -403,7 +475,6 @@
     }).catch(function () { return null; });
   }
 
-  /* 打开时，如果 TA 很久没发过，可能冒一条 */
   function maybeOnOpen() {
     var list = load();
     var lastMJ = null;
@@ -439,13 +510,55 @@
     if (room <= 0) { toast('一条最多 ' + MAX_IMG + ' 张图'); return; }
     var arr = Array.prototype.slice.call(files || []).slice(0, room);
     if (!arr.length) return;
-    Promise.all(arr.map(compress)).then(function (b64s) {
+    Promise.all(arr.map(function (f) { return compress(f, IMG_MAX_W, IMG_Q); })).then(function (b64s) {
       picked = picked.concat(b64s);
       renderPicked();
       if (files.length > room) toast('一条最多 ' + MAX_IMG + ' 张图');
     }).catch(function () {
       toast('这张图读不出来，换一张试试');
     });
+  }
+
+  /* ── 换背景面板 ── */
+  function openBg() {
+    if (!el.bgSheet) return;
+    el.bgSheet.classList.remove('cxm-off');
+    if (el.bgInput) { el.bgInput.value = ''; el.bgInput.style.display = 'none'; }
+    var pv = document.getElementById('cxm-bg-preview');
+    if (pv) {
+      var bg = currentBg();
+      pv.style.background = bg || 'linear-gradient(160deg,#e7ded2 0%,#cbb9a6 100%)';
+      pv.style.backgroundSize = 'cover';
+      pv.style.backgroundPosition = 'center';
+    }
+  }
+
+  function closeBg() {
+    if (el.bgSheet) el.bgSheet.classList.add('cxm-off');
+  }
+
+  function applyBgFile(file) {
+    if (!file) return;
+    toast('正在处理背景…');
+    compress(file, BG_MAX_W, 0.78).then(function (b64) {
+      setChatBg(b64);
+      closeBg();
+      toast('背景换好了，聊天那边也同步了');
+    }).catch(function () { toast('这张图用不了，换一张'); });
+  }
+
+  function applyBgUrl() {
+    var v = (el.bgInput && el.bgInput.value || '').trim();
+    if (!v) { toast('先贴个图片地址'); return; }
+    if (!/^(https?:|data:image)/.test(v)) { toast('地址要 http(s) 开头'); return; }
+    var img = new Image();
+    img.onload = function () {
+      setChatBg(v);
+      closeBg();
+      toast('背景换好了，聊天那边也同步了');
+    };
+    img.onerror = function () { toast('这个地址加载不出图，检查一下'); };
+    img.src = v;
   }
 
   /* ── 样式 ── */
@@ -455,97 +568,138 @@
     var css = [
       '#cx-moments {',
       '  position: fixed; inset: 0; z-index: 1900;',
-      '  background: linear-gradient(180deg, #fdf9f4 0%, #f8f1e8 100%);',
+      '  background: #fff;',
       '  display: flex; flex-direction: column;',
       '  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;',
       '}',
       '#cx-moments.cxm-off { display: none; }',
 
-      '.cxm-head { flex: 0 0 auto; display: flex; align-items: center; gap: 10px;',
-      '  padding: max(12px, env(safe-area-inset-top)) 16px 12px; background: rgba(253,249,244,.92);',
-      '  border-bottom: 1px solid #efe5d8; backdrop-filter: blur(8px); }',
-      '.cxm-back { width: 32px; height: 32px; border: none; background: transparent; color: #8a7a68; font-size: 16px; cursor: pointer; flex: 0 0 auto; }',
-      '.cxm-title { flex: 1 1 auto; font-size: 15px; font-weight: 700; color: #3f362d; letter-spacing: .5px; }',
-      '.cxm-new { border: 1px solid #e0cbb6; background: #fff; color: #b04e33; border-radius: 999px;',
-      '  padding: 6px 13px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px; }',
-      '.cxm-new:active { background: #faf3ea; }',
+      /* 顶栏 */
+      '.cxm-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px;',
+      '  padding: max(10px, env(safe-area-inset-top)) 14px 10px; background: #fff;',
+      '  border-bottom: 1px solid #f0f0f0; }',
+      '.cxm-back { width: 34px; height: 34px; border: none; background: transparent; color: #4a4a4a; font-size: 17px; cursor: pointer; flex: 0 0 auto; }',
+      '.cxm-title { flex: 1 1 auto; font-size: 16px; font-weight: 600; color: #1a1a1a; letter-spacing: .3px; }',
+      '.cxm-new { border: none; background: transparent; color: #576b95; font-size: 13px; font-weight: 500;',
+      '  padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 5px; }',
+      '.cxm-new:active { opacity: .6; }',
 
-      '.cxm-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 14px 40px; }',
-      '.cxm-scroll { width: 100%; max-width: 620px; margin: 0 auto; }',
+      '.cxm-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; background: #fff; }',
+      '.cxm-scroll { width: 100%; max-width: 640px; margin: 0 auto; padding-bottom: 40px; }',
 
-      '.cxm-post { background: #fff; border: 1px solid #f0e6d9; border-radius: 16px; padding: 14px 14px 8px; margin-bottom: 12px;',
-      '  box-shadow: 0 2px 10px rgba(140,110,85,.05); }',
-      '.cxm-headrow { display: flex; align-items: flex-start; gap: 9px; }',
-      '.cxm-ava { width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;',
-      '  font-size: 14px; font-weight: 700; color: #fff; background: #c25b3f; }',
+      /* 封面 */
+      '.cxm-cover { position: relative; height: clamp(210px, 34vh, 330px);',
+      '  background-size: cover; background-position: center; background-repeat: no-repeat;',
+      '  cursor: pointer; }',
+      '.cxm-cover.cxm-cover-default { background: linear-gradient(150deg, #ded2c3 0%, #c0ab97 55%, #8e7b6b 100%); }',
+      '.cxm-cover-shade { position: absolute; inset: 0; pointer-events: none;',
+      '  background: linear-gradient(180deg, rgba(0,0,0,.10) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.40) 100%); }',
+      '.cxm-cam { position: absolute; right: 12px; top: 12px; z-index: 3; width: 32px; height: 32px; border-radius: 50%;',
+      '  border: none; background: rgba(0,0,0,.30); color: #fff; font-size: 13px; cursor: pointer;',
+      '  display: flex; align-items: center; justify-content: center; backdrop-filter: blur(6px); }',
+      '.cxm-cam:active { background: rgba(0,0,0,.5); }',
+      '.cxm-me { position: absolute; right: 16px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; }',
+      '.cxm-me-name { color: #fff; font-size: 16px; font-weight: 600; letter-spacing: .5px;',
+      '  text-shadow: 0 1px 8px rgba(0,0,0,.55); cursor: pointer; padding-bottom: 0; max-width: 46vw;',
+      '  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
+      '.cxm-me-ava { width: 64px; height: 64px; border-radius: 9px; overflow: hidden; flex: 0 0 auto;',
+      '  background: #c25b3f; border: 3px solid rgba(255,255,255,.94); box-shadow: 0 2px 10px rgba(0,0,0,.28);',
+      '  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 20px;',
+      '  font-weight: 700; cursor: pointer; }',
+      '.cxm-me-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }',
+      '.cxm-me-tip { position: absolute; left: 16px; bottom: 18px; z-index: 3; color: rgba(255,255,255,.72);',
+      '  font-size: 11px; text-shadow: 0 1px 4px rgba(0,0,0,.4); pointer-events: none; }',
+
+      /* 动态条目 */
+      '.cxm-feed { background: #fff; }',
+      '.cxm-item { display: flex; gap: 10px; padding: 16px 16px 13px; border-bottom: 1px solid #f2f2f2; }',
+      '.cxm-ava { width: 40px; height: 40px; border-radius: 5px; flex: 0 0 auto; overflow: hidden;',
+      '  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px;',
+      '  font-weight: 700; background: #c25b3f; cursor: pointer; }',
       '.cxm-ava.mj { background: #5b5a86; }',
-      '.cxm-ava img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }',
-      '.cxm-ava, .cxm-name { cursor: pointer; }',
-      '.cxm-ava:active, .cxm-name:active { opacity: .7; }',
-      '.cxm-who { display: flex; flex-direction: column; min-width: 0; }',
-      '.cxm-name { font-size: 13px; font-weight: 700; color: #3f362d; }',
-      '.cxm-time { display: block; font-size: 11px; color: #a2937f; margin-top: 2px; }',
-      '.cxm-del { margin-left: auto; border: none; background: transparent; color: #cfc2b1; font-size: 11px; padding: 4px; cursor: pointer; }',
-      '.cxm-del:active { color: #b04e33; }',
+      '.cxm-ava img { width: 100%; height: 100%; object-fit: cover; display: block; }',
+      '.cxm-ava:active, .cxm-name:active, .cxm-me-ava:active, .cxm-me-name:active { opacity: .75; }',
 
-      '.cxm-text { font-size: 14px; line-height: 1.75; color: #332b24; margin: 10px 2px 0; word-break: break-word; white-space: normal; }',
-      '.cxm-tr { font-size: 11.5px; line-height: 1.7; color: #b3a390; margin: 6px 2px 0; }',
-      '.cxm-card { margin-top: 10px; padding: 30px 26px 34px; border-radius: 12px; position: relative;',
-      '  background: linear-gradient(180deg, #fffdf8 0%, #f9f2e6 100%); border: 1px solid #eee1cf;',
-      '  box-shadow: inset 0 0 0 1px rgba(255,255,255,.65); }',
-      '.cxm-card p { margin: 0; font-size: 15px; line-height: 2.05; color: #3a3129; text-align: center;',
+      '.cxm-main { flex: 1 1 auto; min-width: 0; }',
+      '.cxm-name { display: inline-block; font-size: 14.5px; font-weight: 700; color: #576b95; cursor: pointer;',
+      '  max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }',
+      '.cxm-text { font-size: 15px; line-height: 1.62; color: #232323; margin-top: 6px; word-break: break-word; }',
+
+      '.cxm-card { margin-top: 8px; padding: 26px 22px 30px; border-radius: 8px; position: relative;',
+      '  background: linear-gradient(180deg, #fffdf9 0%, #f8f1e6 100%); border: 1px solid #ece0cf; }',
+      '.cxm-card p { margin: 0; font-size: 15px; line-height: 1.95; color: #3a3129; text-align: center;',
       '  font-family: "Songti SC", "STSong", "SimSun", serif; letter-spacing: .8px; word-break: break-word; }',
-      '.cxm-card-mark { position: absolute; left: 14px; top: 6px; font-size: 30px; line-height: 1;',
+      '.cxm-card-mark { position: absolute; left: 12px; top: 4px; font-size: 26px; line-height: 1;',
       '  color: #dfcdb4; font-family: Georgia, "Times New Roman", serif; }',
-      '.cxm-card-seal { position: absolute; right: 12px; bottom: 10px; width: 22px; height: 22px;',
+      '.cxm-card-seal { position: absolute; right: 10px; bottom: 8px; width: 20px; height: 20px;',
       '  border: 1px solid rgba(194,91,63,.65); border-radius: 3px; display: flex; align-items: center;',
-      '  justify-content: center; font-size: 10px; color: rgba(194,91,63,.8); }',
-      '.cxm-pics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }',
-      '.cxm-pics img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 10px; display: block; }',
-      '.cxm-foot { display: flex; justify-content: flex-end; padding: 6px 0 2px; }',
-      '.cxm-like { border: none; background: transparent; color: #a2937f; font-size: 12px; display: flex; align-items: center; gap: 5px; cursor: pointer; padding: 4px 6px; }',
+      '  justify-content: center; font-size: 9px; color: rgba(194,91,63,.8); }',
+
+      '.cxm-pics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }',
+      '.cxm-pics.one { grid-template-columns: 1fr; }',
+      '.cxm-pics img { width: 100%; object-fit: cover; display: block; border-radius: 4px; cursor: pointer; }',
+      '.cxm-pics img { aspect-ratio: 1 / 1; }',
+      '.cxm-pics.one img { aspect-ratio: 4 / 3; max-width: 74%; }',
+
+      '.cxm-row { display: flex; align-items: center; gap: 6px; margin-top: 9px; }',
+      '.cxm-time { font-size: 12.5px; color: #a6a6a6; }',
+      '.cxm-del { margin-left: auto; border: none; background: transparent; color: #d0d0d0; font-size: 11px;',
+      '  padding: 4px 6px; cursor: pointer; }',
+      '.cxm-del:active { color: #b04e33; }',
+      '.cxm-like { border: none; background: transparent; color: #9b9b9b; font-size: 12.5px;',
+      '  display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 2px; }',
       '.cxm-like.on { color: #c25b3f; }',
-      '.cxm-like span { min-width: 8px; }',
 
-      '.cxm-empty { text-align: center; padding: 80px 20px; color: #a2937f; }',
-      '.cxm-empty i { font-size: 34px; color: #d9cbbb; display: block; margin-bottom: 14px; }',
+      '.cxm-empty { text-align: center; padding: 70px 20px; color: #a9a9a9; }',
+      '.cxm-empty i { font-size: 32px; color: #d8d8d8; display: block; margin-bottom: 12px; }',
       '.cxm-empty p { font-size: 14px; margin: 0 0 6px; }',
-      '.cxm-empty span { font-size: 12px; color: #bcae9b; }',
+      '.cxm-empty span { font-size: 12px; color: #bfbfbf; }',
 
-      /* 发布面板 */
-      '.cxm-sheet { position: fixed; inset: 0; z-index: 3400; background: rgba(38,30,24,.42);',
+      /* 底部面板（发布 / 换背景共用） */
+      '.cxm-sheet { position: fixed; inset: 0; z-index: 3400; background: rgba(0,0,0,.42);',
       '  display: flex; align-items: flex-end; justify-content: center; }',
       '.cxm-sheet.cxm-off { display: none; }',
-      '.cxm-sheet-body { width: 100%; max-width: 620px; background: #fffdfa; border-radius: 18px 18px 0 0;',
-      '  padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 82vh; display: flex; flex-direction: column; }',
-      '.cxm-sheet-t { font-size: 14px; font-weight: 700; color: #3f362d; margin-bottom: 12px; }',
-      '.cxm-ta { width: 100%; min-height: 96px; max-height: 38vh; border: 1px solid #eee2d3; border-radius: 12px;',
-      '  padding: 10px 12px; font-size: 14px; line-height: 1.7; color: #332b24; resize: none; outline: none; background: #fdfaf6; }',
-      '.cxm-ta:focus { border-color: #e2c7ae; }',
+      '.cxm-sheet-body { width: 100%; max-width: 620px; background: #fff; border-radius: 14px 14px 0 0;',
+      '  padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); max-height: 84vh; display: flex; flex-direction: column; }',
+      '.cxm-sheet-t { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; }',
+      '.cxm-ta { width: 100%; min-height: 96px; max-height: 38vh; border: none; border-radius: 8px;',
+      '  padding: 10px 12px; font-size: 15px; line-height: 1.7; color: #232323; resize: none; outline: none;',
+      '  background: #f7f7f7; }',
       '.cxm-thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }',
       '.cxm-thumb { position: relative; }',
-      '.cxm-thumb img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 10px; display: block; }',
+      '.cxm-thumb img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 6px; display: block; }',
       '.cxm-thumb button { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%;',
       '  border: none; background: rgba(0,0,0,.45); color: #fff; font-size: 10px; cursor: pointer; }',
       '.cxm-tools { display: flex; align-items: center; gap: 10px; margin-top: 12px; }',
-      '.cxm-pick { border: 1px dashed #e0cfba; background: #fdf7f0; color: #9a8368; border-radius: 10px;',
-      '  padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 6px; }',
-      '.cxm-hint { font-size: 11px; color: #b3a390; margin-left: auto; }',
+      '.cxm-pick { border: none; background: #f2f2f2; color: #3d3d3d; border-radius: 8px;',
+      '  padding: 8px 13px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; }',
+      '.cxm-pick:active { background: #e8e8e8; }',
+      '.cxm-hint { font-size: 11.5px; color: #b0b0b0; margin-left: auto; }',
       '.cxm-actions { display: flex; gap: 10px; margin-top: 14px; }',
-      '.cxm-cancel { flex: 0 0 96px; padding: 12px 0; border-radius: 12px; border: 1px solid #eee2d3; background: #fff; color: #8a7a68; font-size: 13px; cursor: pointer; }',
-      '.cxm-post-btn { flex: 1 1 auto; padding: 12px 0; border-radius: 12px; border: none; background: #c25b3f; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }',
+      '.cxm-cancel { flex: 0 0 96px; padding: 12px 0; border-radius: 8px; border: none; background: #f2f2f2;',
+      '  color: #4a4a4a; font-size: 14px; cursor: pointer; }',
+      '.cxm-post-btn { flex: 1 1 auto; padding: 12px 0; border-radius: 8px; border: none; background: #07c160;',
+      '  color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }',
       '.cxm-post-btn:disabled { opacity: .5; }',
 
+      /* 换背景面板 */
+      '.cxm-bg-preview { height: 150px; border-radius: 10px; background: #f2f2f2; background-size: cover;',
+      '  background-position: center; margin-bottom: 12px; border: 1px solid #eee; }',
+      '.cxm-bg-url { width: 100%; margin-top: 10px; border: 1px solid #e5e5e5; border-radius: 8px;',
+      '  padding: 10px 12px; font-size: 13px; outline: none; color: #333; }',
+      '.cxm-bg-url:focus { border-color: #c9c9c9; }',
+      '.cxm-bg-note { font-size: 11.5px; color: #9a9a9a; margin-top: 10px; line-height: 1.6; }',
+
       '.cxm-toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); z-index: 3600;',
-      '  background: rgba(48,38,30,.9); color: #fff; font-size: 12px; padding: 9px 15px; border-radius: 999px;',
+      '  background: rgba(30,30,30,.88); color: #fff; font-size: 12.5px; padding: 9px 15px; border-radius: 6px;',
       '  transition: opacity .4s; max-width: 80vw; text-align: center; }',
       '.cxm-toast.cxm-toast-out { opacity: 0; }',
 
       /* 大图预览 */
-      '.cxm-viewer { position: fixed; inset: 0; z-index: 3700; background: rgba(18,14,11,.94);',
+      '.cxm-viewer { position: fixed; inset: 0; z-index: 3700; background: rgba(0,0,0,.94);',
       '  display: none; align-items: center; justify-content: center; padding: 20px; }',
       '.cxm-viewer.on { display: flex; }',
-      '.cxm-viewer img { max-width: 100%; max-height: 100%; border-radius: 8px; }'
+      '.cxm-viewer img { max-width: 100%; max-height: 100%; }'
     ].join('\n');
 
     var s = document.createElement('style');
@@ -554,7 +708,7 @@
     document.head.appendChild(s);
   }
 
-  /* ── 构建界面 ── */
+  /* ── 构建 ── */
   function build() {
     injectStyle();
 
@@ -566,14 +720,31 @@
       '<div class="cxm-head">' +
         '<button class="cxm-back" id="cxm-close"><i class="fas fa-chevron-left"></i></button>' +
         '<span class="cxm-title">朋友圈</span>' +
-        '<button class="cxm-new" id="cxm-open"><i class="fas fa-pen"></i>发一条</button>' +
+        '<button class="cxm-new" id="cxm-open"><i class="fas fa-camera"></i>发一条</button>' +
       '</div>' +
-      '<div class="cxm-list" id="cxm-list"><div class="cxm-scroll" id="cxm-scroll"></div></div>';
+      '<div class="cxm-list" id="cxm-list">' +
+        '<div class="cxm-scroll">' +
+          '<div class="cxm-cover" id="cxm-cover" data-cover="1">' +
+            '<div class="cxm-cover-shade"></div>' +
+            '<button class="cxm-cam" id="cxm-cam" title="换背景"><i class="fas fa-camera"></i></button>' +
+            '<span class="cxm-me-tip">点封面换背景</span>' +
+            '<div class="cxm-me">' +
+              '<span class="cxm-me-name" data-edit="name" data-who="me"></span>' +
+              '<span class="cxm-me-ava" data-edit="ava" data-who="me"></span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="cxm-feed" id="cxm-feed"></div>' +
+        '</div>' +
+      '</div>';
 
     document.body.appendChild(root);
     el.root = root;
     el.scroller = document.getElementById('cxm-list');
-    el.list = document.getElementById('cxm-scroll');
+    el.list = document.getElementById('cxm-list');
+    el.cover = document.getElementById('cxm-cover');
+    el.feed = document.getElementById('cxm-feed');
+
+    // 点封面：头像/名字走编辑，其他地方换背景
     el.list.addEventListener('click', onListClick);
 
     // 图片全屏看
@@ -584,29 +755,21 @@
     document.body.appendChild(viewer);
     viewer.addEventListener('click', function () { viewer.classList.remove('on'); });
 
-    el.list.addEventListener('click', function (e) {
-      if (e.target && e.target.tagName === 'IMG' && e.target.closest('.cxm-pics')) {
-        var v = document.getElementById('cxm-viewer');
-        v.querySelector('img').src = e.target.src;
-        v.classList.add('on');
-      }
-    });
-
     // 发布面板
     var sheet = document.createElement('div');
     sheet.className = 'cxm-sheet cxm-off';
     sheet.innerHTML = '' +
       '<div class="cxm-sheet-body">' +
         '<div class="cxm-sheet-t">发一条动态</div>' +
-        '<textarea class="cxm-ta" id="cxm-ta" placeholder="今天想留下的一句话…"></textarea>' +
+        '<textarea class="cxm-ta" id="cxm-ta" placeholder="这一刻的想法…"></textarea>' +
         '<div class="cxm-thumbs" id="cxm-thumbs" style="display:none"></div>' +
         '<div class="cxm-tools">' +
-          '<button class="cxm-pick" id="cxm-pick"><i class="far fa-image"></i>加图片</button>' +
-          '<span class="cxm-hint" id="cxm-hint">最多 3 张</span>' +
+          '<button class="cxm-pick" id="cxm-pick"><i class="far fa-image"></i>图片</button>' +
+          '<span class="cxm-hint">最多 3 张</span>' +
         '</div>' +
         '<div class="cxm-actions">' +
           '<button class="cxm-cancel" id="cxm-cancel">取消</button>' +
-          '<button class="cxm-post-btn" id="cxm-do-post">发布</button>' +
+          '<button class="cxm-post-btn" id="cxm-do-post">发表</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(sheet);
@@ -614,6 +777,29 @@
     el.input = sheet.querySelector('#cxm-ta');
     el.imgs = sheet.querySelector('#cxm-thumbs');
 
+    // 换背景面板
+    var bgSheet = document.createElement('div');
+    bgSheet.className = 'cxm-sheet cxm-off';
+    bgSheet.innerHTML = '' +
+      '<div class="cxm-sheet-body">' +
+        '<div class="cxm-sheet-t">朋友圈背景</div>' +
+        '<div class="cxm-bg-preview" id="cxm-bg-preview"></div>' +
+        '<div class="cxm-tools">' +
+          '<button class="cxm-pick" id="cxm-bg-file"><i class="far fa-image"></i>选图片</button>' +
+          '<button class="cxm-pick" id="cxm-bg-urlbtn"><i class="fas fa-link"></i>用链接</button>' +
+        '</div>' +
+        '<input class="cxm-bg-url" id="cxm-bg-url" type="url" placeholder="粘贴图片地址 https://…" style="display:none">' +
+        '<div class="cxm-bg-note">换了之后聊天页背景也会变（两边是同一份）。不想要背景就点「恢复默认」。</div>' +
+        '<div class="cxm-actions">' +
+          '<button class="cxm-cancel" id="cxm-bg-reset">恢复默认</button>' +
+          '<button class="cxm-post-btn" id="cxm-bg-save">用这个</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(bgSheet);
+    el.bgSheet = bgSheet;
+    el.bgInput = bgSheet.querySelector('#cxm-bg-url');
+
+    // 隐藏的文件选择器（动态图片）
     var fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
@@ -621,11 +807,22 @@
     fileInput.style.display = 'none';
     document.body.appendChild(fileInput);
 
+    // 隐藏的文件选择器（背景）
+    var bgFile = document.createElement('input');
+    bgFile.type = 'file';
+    bgFile.accept = 'image/*';
+    bgFile.style.display = 'none';
+    document.body.appendChild(bgFile);
+
     // 事件
     document.getElementById('cxm-close').addEventListener('click', hide);
     document.getElementById('cxm-open').addEventListener('click', openComposer);
     document.getElementById('cxm-cancel').addEventListener('click', closeComposer);
     document.getElementById('cxm-do-post').addEventListener('click', publish);
+    document.getElementById('cxm-cam').addEventListener('click', function (e) {
+      e.stopPropagation();
+      openBg();
+    });
 
     document.getElementById('cxm-pick').addEventListener('click', function () {
       fileInput.value = '';
@@ -641,9 +838,34 @@
       renderPicked();
     });
 
-    // 点遮罩关掉发布面板
     sheet.addEventListener('click', function (e) {
       if (e.target === sheet) closeComposer();
+    });
+
+    // 背景面板事件
+    bgSheet.addEventListener('click', function (e) {
+      if (e.target === bgSheet) closeBg();
+    });
+
+    document.getElementById('cxm-bg-file').addEventListener('click', function () {
+      bgFile.value = '';
+      bgFile.click();
+    });
+
+    bgFile.addEventListener('change', function () { applyBgFile(bgFile.files && bgFile.files[0]); });
+
+    document.getElementById('cxm-bg-urlbtn').addEventListener('click', function () {
+      var inp = el.bgInput;
+      inp.style.display = 'block';
+      inp.focus();
+    });
+
+    document.getElementById('cxm-bg-save').addEventListener('click', applyBgUrl);
+
+    document.getElementById('cxm-bg-reset').addEventListener('click', function () {
+      setChatBg('');
+      closeBg();
+      toast('背景已恢复默认');
     });
 
     built = true;
@@ -653,7 +875,7 @@
   function open() {
     if (!built) build();
     el.root.classList.remove('cxm-off');
-    el.scroller.scrollTop = 0;
+    if (el.scroller) el.scroller.scrollTop = 0;
     render();
     maybeOnOpen();
   }
@@ -661,10 +883,8 @@
   function hide() {
     if (el.root) el.root.classList.add('cxm-off');
     closeComposer();
+    closeBg();
   }
 
-  /* ── 对外 ── */
   window.Moments = { open: open, close: hide };
-
-  // 站点可能还没到 DOM 完，等一等再什么都不做（build 在第一次 open 时才跑）
 })();
