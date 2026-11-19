@@ -175,7 +175,8 @@
     try {
       var arr = window._customReplies;
       if (Array.isArray(arr)) {
-        var list = arr.map(function (x) { return String(x == null ? '' : x).trim(); }).filter(Boolean);
+        var list = arr.map(function (x) { return String(x == null ? '' : x).trim(); })
+          .filter(function (x) { return x && x.indexOf('__TAROT__') !== 0; });
         if (list.length) return list;
       }
     } catch (e) {}
@@ -291,12 +292,7 @@
           p.imgs.map(function (src) { return '<img src="' + src + '" alt="">'; }).join('') +
         '</div>';
       }
-      var body = '';
-      if (p.card) {
-        body = '<div class="cxm-card"><span class="cxm-card-mark">“</span><p>' + esc(p.text) + '</p><span class="cxm-card-seal">伝</span></div>';
-      } else if (p.text) {
-        body = '<div class="cxm-text">' + esc(p.text) + '</div>';
-      }
+      var body = p.text ? '<div class="cxm-text">' + esc(p.text) + '</div>' : '';
       // 点赞的人（兼容只有 liked/likes 的旧数据）
       var likedBy = p.likedBy || (p.liked ? ['me'] : []);
       var liked = likedBy.indexOf('me') > -1;
@@ -497,7 +493,7 @@
     }, 2000 + Math.random() * 2000);
 
     setTimeout(function () {
-      if (Math.random() < 0.38) mjPost(Math.random() < 0.45 ? 'ai' : 'card');
+      if (Math.random() < 0.38) mjPost();
     }, 4200 + Math.random() * 4000);
 
     // 梦角偶尔来评论一句
@@ -526,7 +522,7 @@
   function cardPost() {
     var pool = cardsPool();
     var pick = pool[Math.floor(Math.random() * pool.length)] || '';
-    return { text: String(pick).slice(0, 160), card: true };
+    return { text: String(pick).slice(0, 160), card: false };
   }
 
   function pushMJ(data) {
@@ -540,12 +536,9 @@
     render();
   }
 
-  /* kind = 'card'（抽字卡）| 'ai'（现场写一句，失败退回字卡） */
-  function mjPost(kind) {
-    if (kind !== 'ai') { pushMJ(cardPost()); return; }
-    aiMoment().then(function (text) {
-      pushMJ(text ? { text: text, card: false } : cardPost());
-    });
+  /* 梦角发动态：只从字卡库里抽（不走 AI） */
+  function mjPost() {
+    pushMJ(cardPost());
   }
 
   /* ── AI ── */
@@ -607,7 +600,7 @@
     }
     if (lastMJ && Date.now() - lastMJ.ts < 90 * 60 * 1000) return;
     if (Math.random() > 0.55) return;
-    setTimeout(function () { mjPost(Math.random() < 0.2 ? 'ai' : 'card'); }, 900 + Math.random() * 900);
+    setTimeout(function () { mjPost(); }, 900 + Math.random() * 900);
   }
 
   /* ── 发布面板 ── */
