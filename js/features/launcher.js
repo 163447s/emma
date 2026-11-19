@@ -22,6 +22,7 @@
 
   const ITEMS = [
     { key: 'chat',        name: '聊天',     desc: '和 TA 说话，发字卡',        icon: 'fa-comment-dots',      tone: 'warm' },
+    { key: 'moments',     name: '朋友圈',   desc: '你和 TA 的日常，都能发',     icon: 'fa-camera-retro',      tone: 'sky' },
     { key: 'decision',    name: '抉择',     desc: '抛硬币、转盘，替你做决定',   icon: 'fa-balance-scale',     tone: 'lilac', target: 'decision-function' },
     { key: 'fortune',     name: '运势占卜', desc: '今天会怎样，让牌说话',       icon: 'fa-star-and-crescent', tone: 'gold',  target: 'fortune-lenormand-function' },
     { key: 'anniversary', name: '重要日',   desc: '纪念日和倒计时',             icon: 'fa-heart',             tone: 'rose',  target: 'anniversary-function' },
@@ -37,7 +38,8 @@
     rose:  ['#a8556a', '#f8e8ec'],
     ink:   ['#4a4f55', '#eaedf0'],
     mint:  ['#4f7a63', '#e4f1ea'],
-    night: ['#5b5a86', '#e9e8f4']
+    night: ['#5b5a86', '#e9e8f4'],
+    sky:   ['#4a7089', '#e6eff4']
   };
 
   let homeEl = null;
@@ -221,6 +223,18 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
       mode = 'chat';
       hideHome();
       if (fabEl) fabEl.classList.add('cx-on');
+      return;
+    }
+
+    if (key === 'moments') {
+      mode = 'feature';
+      showHome(true);
+      if (window.Moments && typeof window.Moments.open === 'function') {
+        window.Moments.open();
+      } else {
+        showHome();
+        toast('朋友圈模块还没加载好');
+      }
       return;
     }
 
