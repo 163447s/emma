@@ -3,7 +3,7 @@
  * 并更新 index.html 中 js 文件的 ?v= 参数，用户才会加载到新版本。
  * v3：图标 URL 加版本参数（?v=2），强制刷新已安装的图标缓存。
  */
-const CACHE_NAME = 'milk-emma-v16';
+const CACHE_NAME = 'milk-emma-v17';
 
 /* 核心资源（同源，首次访问时预缓存） */
 const CORE_ASSETS = [
@@ -105,9 +105,27 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
-  /* 允许运行时缓存的请求：同源静态资源 + 白名单 CDN */
-  var allowRuntime = sameOrigin || RUNTIME_CACHE_HOSTS.indexOf(url.hostname) !== -1;
-  if (!allowRuntime) return;
+  /* 同源静态资源：网络优先，拿到就顺手更新缓存；断网/失败才用缓存。
+     这样每次改版，正常联网刷新一次就是最新的。 */
+  if (sameOrigin) {
+    event.respondWith(
+      fetch(req).then(function (res) {
+        if (res && res.status === 200) {
+          var copy = res.clone();
+          caches.open(CACHE_NAME).then(function (c) { c.put(req, copy); });
+        }
+        return res;
+      }).catch(function () {
+        return caches.match(req).then(function (cached) {
+          return cached || caches.match('./index.html');
+        });
+      })
+    );
+    return;
+  }
+
+  /* 白名单 CDN：缓存优先（这些库很少变，省流量） */
+  if (RUNTIME_CACHE_HOSTS.indexOf(url.hostname) === -1) return;
 
   event.respondWith(
     caches.match(req).then(function (cached) {
