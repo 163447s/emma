@@ -243,8 +243,33 @@
     }
   }
 
+  /* 重画前把正在写的评论存一下，重画后放回去 */
+  function snapInputs() {
+    var open = {}, vals = {};
+    Array.prototype.forEach.call(document.querySelectorAll('.cxm-cinput'), function (inp) {
+      var id = inp.getAttribute('data-cid');
+      if (!id) return;
+      vals[id] = inp.value;
+      var wrap = inp.closest('.cxm-cwrap');
+      if (wrap && wrap.classList.contains('on')) open[id] = 1;
+    });
+    return { open: open, vals: vals };
+  }
+
+  function restoreInputs(snap) {
+    if (!snap) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.cxm-cinput'), function (inp) {
+      var id = inp.getAttribute('data-cid');
+      if (!id) return;
+      if (snap.vals[id]) inp.value = snap.vals[id];
+      var wrap = inp.closest('.cxm-cwrap');
+      if (snap.open[id] && wrap) { wrap.classList.add('on'); }
+    });
+  }
+
   /* ── 渲染：动态列表 ── */
   function render() {
+    var snap = snapInputs();
     renderCover();
     if (!el.feed) return;
 
@@ -272,8 +297,25 @@
       } else if (p.text) {
         body = '<div class="cxm-text">' + esc(p.text) + '</div>';
       }
-      var liked = p.liked;
-      var likes = p.likes || 0;
+      // 点赞的人（兼容只有 liked/likes 的旧数据）
+      var likedBy = p.likedBy || (p.liked ? ['me'] : []);
+      var liked = likedBy.indexOf('me') > -1;
+      var likesRow = likedBy.length
+        ? '<div class="cxm-likes"><i class="fas fa-heart"></i>' + likedBy.map(function (w) {
+            var nm3 = (w === 'mj') ? n.mj : n.me;
+            var src3 = avatarOf(w);
+            return '<span class="cxm-liker">' +
+              (src3 ? '<img src="' + src3 + '" alt="">' : '<span class="cxm-liker-t">' + esc(nm3.slice(0, 1)) + '</span>') +
+              esc(nm3) + '</span>';
+          }).join('') + '</div>'
+        : '';
+
+      // 评论
+      var comments = (p.comments || []).map(function (c) {
+        var cn = (c.who === 'mj') ? n.mj : n.me;
+        return '<div class="cxm-cmt"><span class="cxm-cname">' + esc(cn) + '</span>：' + esc(c.text) + '</div>';
+      }).join('');
+      var cmtBlock = comments ? '<div class="cxm-cmts">' + comments + '</div>' : '';
 
       return '' +
         '<article class="cxm-item" data-id="' + p.id + '">' +
@@ -286,16 +328,22 @@
             '<div class="cxm-row">' +
               '<span class="cxm-time">' + ago(p.ts) + '</span>' +
               '<button class="cxm-del" data-del="1" title="删除"><i class="fas fa-times"></i></button>' +
+              '<button class="cxm-cbtn" data-comment="1">评论</button>' +
               '<button class="cxm-like' + (liked ? ' on' : '') + '" data-like="1">' +
                 '<i class="' + (liked ? 'fas fa-heart' : 'far fa-heart') + '"></i>' +
-                (likes ? '<span>' + likes + '</span>' : '') +
               '</button>' +
+            '</div>' +
+            likesRow + cmtBlock +
+            '<div class="cxm-cwrap" data-cwrap="1">' +
+              '<input class="cxm-cinput" data-cid="' + p.id + '" placeholder="说点什么…">' +
+              '<button class="cxm-csend" data-csend="1">发送</button>' +
             '</div>' +
           '</div>' +
         '</article>';
     }).join('');
 
     el.feed.innerHTML = html;
+    restoreInputs(snap);
   }
 
   function esc(s) {
@@ -325,13 +373,52 @@
       var list = load();
       for (var i = 0; i < list.length; i++) {
         if (list[i].id === id) {
-          list[i].liked = !list[i].liked;
-          list[i].likes = Math.max(0, (list[i].likes || 0) + (list[i].liked ? 1 : -1));
+          var who = list[i].likedBy || (list[i].liked ? ['me'] : []);
+          var at = who.indexOf('me');
+          if (at > -1) who.splice(at, 1);
+          else who.push('me');
+          list[i].likedBy = who;
+          list[i].liked = who.indexOf('me') > -1;
+          list[i].likes = who.length;
           break;
         }
       }
       save(list);
       render();
+      return;
+    }
+
+    // 打开评论输入
+    var cbtn = e.target.closest ? e.target.closest('[data-comment]') : null;
+    if (cbtn) {
+      var art = cbtn.closest('.cxm-item');
+      var wrap = art && art.querySelector('.cxm-cwrap');
+      if (wrap) {
+        wrap.classList.add('on');
+        var inp = wrap.querySelector('.cxm-cinput');
+        if (inp) { inp.value = ''; inp.focus(); }
+      }
+      return;
+    }
+
+    // 发评论
+    var sendBtn = e.target.closest ? e.target.closest('[data-csend]') : null;
+    if (sendBtn) {
+      var art2 = sendBtn.closest('.cxm-item');
+      var idc = art2 && art2.getAttribute('data-id');
+      var inp2 = art2 && art2.querySelector('.cxm-cinput');
+      var txt = (inp2 && inp2.value || '').trim();
+      if (!txt) return;
+      // 发完收起输入行
+      if (inp2) inp2.value = '';
+      var wrap2 = art2.querySelector('.cxm-cwrap');
+      if (wrap2) wrap2.classList.remove('on');
+      addComment(idc, 'me', txt);
+      // 如果评的是梦角的动态，TA 有一半几率回一句
+      var tgt = load().filter(function (x) { return x.id === idc; })[0];
+      if (tgt && tgt.who === 'mj' && Math.random() < 0.5) {
+        setTimeout(function () { mjComment(idc); }, 1600 + Math.random() * 2200);
+      }
       return;
     }
 
@@ -350,6 +437,33 @@
       var v = document.getElementById('cxm-viewer');
       if (v) { v.querySelector('img').src = e.target.src; v.classList.add('on'); }
     }
+  }
+
+  /* ── 评论 ── */
+  function addComment(postId, who, text) {
+    if (!postId || !text) return;
+    var list = load();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === postId) {
+        if (!list[i].comments) list[i].comments = [];
+        list[i].comments.push({ who: who, text: String(text).slice(0, 120), ts: Date.now() });
+        break;
+      }
+    }
+    save(list);
+    render();
+  }
+
+  var MJ_REPLY = [
+    '嗯。', '看到了。', '在。', '挺好的。', '别忘了吃饭。',
+    '我记住了。', '下次一起。', '别熬夜。', '这个时候还醒着？',
+    '谢谢你。', '我一直都在。'
+  ];
+
+  /* 梦角在动态下面回一句 */
+  function mjComment(postId) {
+    var pick = MJ_REPLY[Math.floor(Math.random() * MJ_REPLY.length)];
+    addComment(postId, 'mj', pick);
   }
 
   /* ── 发布 ── */
@@ -385,13 +499,23 @@
     setTimeout(function () {
       if (Math.random() < 0.38) mjPost(Math.random() < 0.45 ? 'ai' : 'card');
     }, 4200 + Math.random() * 4000);
+
+    // 梦角偶尔来评论一句
+    setTimeout(function () {
+      var list = load();
+      var mine = list.filter(function (x) { return x.who === 'me'; })[0];
+      if (mine && Math.random() < 0.55) mjComment(mine.id);
+    }, 6000 + Math.random() * 5000);
   }
 
   function mjLikeMine() {
     var list = load();
     for (var i = 0; i < list.length; i++) {
       if (list[i].who === 'me') {
-        list[i].likes = (list[i].likes || 0) + 1;
+        var w = list[i].likedBy || (list[i].liked ? ['me'] : []);
+        if (w.indexOf('mj') < 0) w.push('mj');
+        list[i].likedBy = w;
+        list[i].likes = w.length;
         save(list);
         render();
         return;
@@ -649,6 +773,29 @@
       '.cxm-like { border: none; background: transparent; color: #9b9b9b; font-size: 12.5px;',
       '  display: flex; align-items: center; gap: 4px; cursor: pointer; padding: 4px 2px; }',
       '.cxm-like.on { color: #c25b3f; }',
+      '.cxm-cbtn { border: none; background: transparent; color: #9b9b9b; font-size: 12.5px; padding: 4px 8px; cursor: pointer; }',
+      '.cxm-cbtn:active { color: #576b95; }',
+
+      /* 点赞头像列表 */
+      '.cxm-likes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 8px;',
+      '  padding: 6px 8px; background: #f7f7f7; border-radius: 4px; font-size: 12.5px; color: #576b95; }',
+      '.cxm-likes i { color: #c25b3f; font-size: 11px; }',
+      '.cxm-liker { display: flex; align-items: center; gap: 4px; }',
+      '.cxm-liker img { width: 18px; height: 18px; border-radius: 3px; object-fit: cover; display: block; }',
+      '.cxm-liker-t { width: 18px; height: 18px; border-radius: 3px; background: #c25b3f; color: #fff;',
+      '  font-size: 10px; display: flex; align-items: center; justify-content: center; }',
+
+      /* 评论 */
+      '.cxm-cmts { margin-top: 7px; }',
+      '.cxm-cmt { font-size: 13.5px; line-height: 1.6; color: #232323; padding: 2px 0; word-break: break-word; }',
+      '.cxm-cname { color: #576b95; font-weight: 500; cursor: pointer; }',
+      '.cxm-cwrap { display: none; gap: 8px; margin-top: 8px; }',
+      '.cxm-cwrap.on { display: flex; }',
+      '.cxm-cinput { flex: 1 1 auto; min-width: 0; border: 1px solid #ededed; border-radius: 6px;',
+      '  padding: 7px 10px; font-size: 13.5px; outline: none; background: #fafafa; color: #232323; }',
+      '.cxm-cinput:focus { border-color: #d6d6d6; background: #fff; }',
+      '.cxm-csend { flex: 0 0 auto; border: none; background: #07c160; color: #fff; border-radius: 6px;',
+      '  padding: 7px 13px; font-size: 13px; cursor: pointer; }',
 
       '.cxm-empty { text-align: center; padding: 70px 20px; color: #a9a9a9; }',
       '.cxm-empty i { font-size: 32px; color: #d8d8d8; display: block; margin-bottom: 12px; }',
@@ -746,6 +893,17 @@
 
     // 点封面：头像/名字走编辑，其他地方换背景
     el.list.addEventListener('click', onListClick);
+
+    // 评论框里按回车直接发
+    el.list.addEventListener('keydown', function (e) {
+      if (!e.target || !e.target.classList || !e.target.classList.contains('cxm-cinput')) return;
+      if (e.key === 'Enter' || e.keyCode === 13) {
+        e.preventDefault();
+        var wrap = e.target.closest('.cxm-cwrap');
+        var btn = wrap && wrap.querySelector('[data-csend]');
+        if (btn) btn.click();
+      }
+    });
 
     // 图片全屏看
     var viewer = document.createElement('div');
