@@ -174,18 +174,6 @@
   background: #c25b3f; color: #fff; font-size: 13px; cursor: pointer;
 }
 .cxch-send[disabled] { opacity: .45; }
-.cxch-mic {
-  flex: none; width: 38px; height: 38px; border-radius: 11px; border: 1px solid #ece3d8;
-  background: #fff; color: #a08b74; font-size: 13px; cursor: pointer;
-}
-.cxch-mic.cxch-rec { background: #c25b3f; border-color: #c25b3f; color: #fff; animation: cxchMic 1.3s ease-in-out infinite; }
-.cxch-hint {
-  display: none; margin: 0 12px 8px; padding: 9px 11px; border-radius: 10px;
-  background: #fdf3e6; border: 1px solid #f0dcc2; color: #8a6a4a;
-  font-size: 12px; line-height: 1.65;
-}
-.cxch-hint.on { display: block; }
-@keyframes cxchMic { 0%,100% { box-shadow: 0 0 0 0 rgba(194,91,63,.34); } 55% { box-shadow: 0 0 0 8px rgba(194,91,63,0); } }
 
 /* 档案 / 设置小层 */
 .cxch-layer {
@@ -247,9 +235,7 @@
         <button class="cxch-btn" id="cxch-end" title="结束并归档"><i class="fas fa-circle-check"></i></button>
       </header>
       <div class="cxch-scroll" id="cxch-scroll"></div>
-      <div class="cxch-hint" id="cxch-hint"></div>
       <footer class="cxch-input">
-        <button class="cxch-mic" id="cxch-mic" title="语音转文字"><i class="fas fa-microphone"></i></button>
         <input id="cxch-input" type="text" autocomplete="off" placeholder="回复传讯师…">
         <button class="cxch-send" id="cxch-send"><i class="fas fa-paper-plane"></i></button>
       </footer>
@@ -285,89 +271,6 @@
     document.getElementById('cxch-close').addEventListener('click', close);
     document.getElementById('cxch-send').addEventListener('click', send);
 
-    /* ── 语音转文字：点一下开始，说完再点一下结束 ── */
-    (function setupMic() {
-      const btn = document.getElementById('cxch-mic');
-      const hintEl = document.getElementById('cxch-hint');
-      if (!btn) return;
-
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const UA = navigator.userAgent || '';
-      const isIOS = /iPhone|iPad|iPod/i.test(UA);
-      const inWX = /MicroMessenger|QQ\//i.test(UA);
-      let rec = null, running = false, base = '';
-      let hintTimer = null;
-
-      /* 就地把原因说清楚，比一闪而过的 toast 好排查 */
-      function hint(text) {
-        if (!hintEl) { toast(text); return; }
-        hintEl.innerHTML = text;
-        hintEl.classList.add('on');
-        clearTimeout(hintTimer);
-        hintTimer = setTimeout(function () { hintEl.classList.remove('on'); }, 9000);
-      }
-
-      function why() {
-        var tail = inWX
-          ? '你像是在微信/QQ 里打开的，这种内置浏览器不给网页用麦克风。把网址复制到系统浏览器（Safari / Chrome）里打开就能用。'
-          : (isIOS
-            ? 'iPhone 要先开启听写：设置 → 通用 → 键盘 → 启用「听写」，并在弹窗里允许麦克风。'
-            : '需要在弹窗里允许麦克风；不行就换 Chrome / Edge 打开。');
-        return tail + '也可以直接点输入框，用键盘上的麦克风说，一样会变成文字。';
-      }
-
-      btn.addEventListener('click', () => {
-        if (!SR) {
-          hint('这个浏览器还没有网页听写能力。' + why());
-          return;
-        }
-        if (running) { try { rec.stop(); } catch (e) {} return; }
-
-        const input = document.getElementById('cxch-input');
-        base = input.value || '';
-        rec = new SR();
-        rec.lang = 'zh-CN';
-        rec.interimResults = true;
-        rec.continuous = false;
-        rec.maxAlternatives = 1;
-
-        rec.onstart = () => { running = true; btn.classList.add('cxch-rec'); if (hintEl) hintEl.classList.remove('on'); };
-
-        rec.onresult = (e) => {
-          let fin = '', mid = '';
-          for (let i = e.resultIndex; i < e.results.length; i++) {
-            const r = e.results[i];
-            if (r.isFinal) fin += r[0].transcript;
-            else mid += r[0].transcript;
-          }
-          input.value = base + fin + mid;
-        };
-
-        rec.onerror = (e) => {
-          running = false; btn.classList.remove('cxch-rec');
-          const map = {
-            'not-allowed': '麦克风没被允许',
-            'service-not-allowed': '浏览器不提供识别服务',
-            'no-speech': '没听到声音',
-            'audio-capture': '没有可用的麦克风',
-            'network': '识别要联网，现在连不上',
-            'aborted': '这次被中断了'
-          };
-          hint('识别失败：' + (map[e.error] || e.error) + '（错误码 ' + (e.error || '') + '）。' + why());
-        };
-
-        rec.onend = () => {
-          running = false; btn.classList.remove('cxch-rec');
-          const i2 = document.getElementById('cxch-input');
-          if (i2) i2.focus();
-        };
-
-        try { rec.start(); } catch (err) {
-          running = false; btn.classList.remove('cxch-rec');
-          hint('麦克风起不来：' + (err.message || err) + '。' + why());
-        }
-      });
-    })();
     document.getElementById('cxch-input').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
     document.getElementById('cxch-end').addEventListener('click', () => {
