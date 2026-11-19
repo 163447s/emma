@@ -21,11 +21,47 @@
 
   /* ── 名字 ── */
   function names() {
-    var s = (window.settings && typeof window.settings === 'object') ? window.settings : {};
+    var s = {};
+    try { if (typeof settings !== 'undefined' && settings) s = settings; } catch (e) {}
+    var dmy = document.getElementById('my-name');
+    var dpt = document.getElementById('partner-name');
     return {
-      me: s.myName || '我',
-      mj: s.partnerName || '梦角'
+      me: s.myName || (dmy && dmy.textContent.trim()) || '我',
+      mj: s.partnerName || (dpt && dpt.textContent.trim()) || '梦角'
     };
+  }
+
+  /* 头像直接用聊天页那个（同一份数据，改一边两边都变） */
+  function avatarOf(who) {
+    var el = document.getElementById(who === 'mj' ? 'partner-avatar' : 'my-avatar');
+    var img = el && el.querySelector('img');
+    return img ? img.src : null;
+  }
+
+  /* 点头像 / 名字 → 打开原站自己的编辑弹窗（改完自动同步） */
+  function openEditor(what, who) {
+    var id = what === 'ava'
+      ? (who === 'mj' ? 'partner-avatar' : 'my-avatar')
+      : (who === 'mj' ? 'partner-name' : 'my-name');
+    var el = document.getElementById(id);
+    if (!el) { toast('聊天那边还没准备好，先回聊天页一次'); return; }
+    try { el.click(); } catch (e) { toast('打不开设置'); return; }
+    watchEditor();
+  }
+
+  /* 等编辑弹窗关掉，再把朋友圈重画一遍（名字/头像就跟着变了） */
+  function watchEditor() {
+    var opened = false, t0 = Date.now();
+    var timer = setInterval(function () {
+      var vis = Array.prototype.some.call(document.querySelectorAll('.modal'), function (m) {
+        if (m.id === 'disclaimer-modal' || m.id === 'cx-chuan') return false;
+        var d = getComputedStyle(m).display;
+        return d && d !== 'none';
+      });
+      if (vis) opened = true;
+      if (opened && !vis) { clearInterval(timer); render(); }
+      if (!opened && Date.now() - t0 > 3000) { clearInterval(timer); render(); }
+    }, 300);
   }
 
   /* ── 存取 ── */
@@ -76,25 +112,33 @@
 
   function uid() { return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
-  /* ── 梦角的动态池（日语原句 + 中文） ── */
-  var MJ_POSTS = [
-    { jp: '静かだった。君の声、聞こえた気がした。', zh: '很安静。好像听见了你的声音。' },
-    { jp: '今日は雲が多かった。でも、悪くない。', zh: '今天云有点多。不过，也不算坏。' },
-    { jp: '眠い。…少しだけ、待って。', zh: '困了。……稍微，等我一下。' },
-    { jp: 'この時間は、いつも君のこと考えてる。', zh: '这个时间，总是在想你。' },
-    { jp: '飯、食べた？', zh: '饭，吃了吗？' },
-    { jp: '猫が膝の上にいる。動けない。', zh: '猫在膝盖上。动不了。' },
-    { jp: '今日、少しだけ頑張った。褒めて。', zh: '今天稍微努力了一下。夸我。' },
-    { jp: '外、寒い。厚いの、着て。', zh: '外面冷。穿厚一点的。' },
-    { jp: '月、きれいだよ。', zh: '月亮很好看。' },
-    { jp: '変な夢、見た。君が出てきた。', zh: '做了个奇怪的梦。你出现了。' },
-    { jp: 'ちょっと疲れた。…隣、いい？', zh: '有点累。……旁边，可以吗？' },
-    { jp: 'ありがとう。…言うの、遅いけど。', zh: '谢谢。……虽然说得有点晚。' },
-    { jp: '君の字、好き。', zh: '喜欢你的字。' },
-    { jp: '静かにして。…でも、君は来ていい。', zh: '安静一点。……不过，你可以来。' },
-    { jp: '明日も、ここに来る？', zh: '明天，也会来这里吗？' },
-    { jp: '手、冷たくない？', zh: '手，不冷吗？' }
+  /* ── 兜底句池（你自己的字卡库为空时才用） ── */
+  var CN_POOL = [
+    '今天很安静，适合什么都不做。',
+    '窗外的光很好，坐了一会儿。',
+    '睡了很久，醒来还是想睡。',
+    '热水洗过手，才觉得冷。',
+    '路上没几个人，风从后面来。',
+    '吃饭的时候，想起你还没吃。',
+    '今天没什么事，就是普通的今天。',
+    '房间很暗，只留了一盏灯。',
+    '有点困，但还不想睡。',
+    '下午下了很久的雨，没出门。',
+    '把该做的做完了，剩下的明天。',
+    '就这样过着，也挺好。'
   ];
+
+  /* ── 字卡库：优先用「自定义回复」里你囤的那些 ── */
+  function cardsPool() {
+    try {
+      var arr = window._customReplies;
+      if (Array.isArray(arr)) {
+        var list = arr.map(function (x) { return String(x == null ? '' : x).trim(); }).filter(Boolean);
+        if (list.length) return list;
+      }
+    } catch (e) {}
+    return CN_POOL;
+  }
 
   /* ── 图片压缩 ── */
   function compress(file) {
@@ -143,7 +187,12 @@
             return '<img src="' + src + '" data-full="1" alt="">';
           }).join('') + '</div>'
         : '';
-      var zh = (isMJ && p.zh) ? '<div class="cxm-tr">' + esc(p.zh) + '</div>' : '';
+      var body = '';
+      if (p.card) {
+        body = '<div class="cxm-card"><span class="cxm-card-mark">“</span><p>' + esc(p.text) + '</p><span class="cxm-card-seal">伝</span></div>';
+      } else if (p.text) {
+        body = '<div class="cxm-text">' + esc(p.text) + '</div>';
+      }
       var likeCls = p.liked ? 'cxm-like on' : 'cxm-like';
       var heart = p.liked ? 'fas fa-heart' : 'far fa-heart';
       var likes = p.likes ? p.likes : 0;
@@ -151,15 +200,16 @@
       return '' +
         '<article class="cxm-post" data-id="' + p.id + '">' +
           '<div class="cxm-headrow">' +
-            '<span class="cxm-ava' + (isMJ ? ' mj' : '') + '">' + esc(initial) + '</span>' +
+            '<span class="cxm-ava' + (isMJ ? ' mj' : '') + '" data-edit="ava" data-who="' + (isMJ ? 'mj' : 'me') + '">' +
+              (avatarOf(p.who) ? '<img src="' + avatarOf(p.who) + '" alt="">' : esc(initial)) +
+            '</span>' +
             '<span class="cxm-who">' +
-              '<span class="cxm-name">' + esc(name) + '</span>' +
+              '<span class="cxm-name" data-edit="name" data-who="' + (isMJ ? 'mj' : 'me') + '">' + esc(name) + '</span>' +
               '<span class="cxm-time">' + ago(p.ts) + '</span>' +
             '</span>' +
             '<button class="cxm-del" data-del="1" title="删除"><i class="fas fa-times"></i></button>' +
           '</div>' +
-          (p.text ? '<div class="cxm-text">' + esc(p.text) + '</div>' : '') +
-          zh +
+          body +
           imgs +
           '<div class="cxm-foot">' +
             '<button class="' + likeCls + '" data-like="1">' +
@@ -180,6 +230,12 @@
 
   /* ── 点赞 / 删除 ── */
   function onListClick(e) {
+    var editEl = e.target.closest ? e.target.closest('[data-edit]') : null;
+    if (editEl) {
+      openEditor(editEl.getAttribute('data-edit'), editEl.getAttribute('data-who'));
+      return;
+    }
+
     var likeBtn = e.target.closest ? e.target.closest('[data-like]') : null;
     var delBtn = e.target.closest ? e.target.closest('[data-del]') : null;
 
@@ -247,7 +303,7 @@
     }, 2000 + Math.random() * 2000);
 
     setTimeout(function () {
-      if (Math.random() < 0.38) mjPost();
+      if (Math.random() < 0.38) mjPost(Math.random() < 0.45 ? 'ai' : 'card');
     }, 4200 + Math.random() * 4000);
   }
 
@@ -263,14 +319,21 @@
     }
   }
 
-  function mjPost() {
-    var pick = MJ_POSTS[Math.floor(Math.random() * MJ_POSTS.length)];
+  /* 抽一张字卡当动态 */
+  function cardPost() {
+    var pool = cardsPool();
+    var pick = pool[Math.floor(Math.random() * pool.length)] || '';
+    return { text: String(pick).slice(0, 160), card: true };
+  }
+
+  function pushMJ(data) {
+    if (!data || !data.text) return;
     var list = load();
     list.unshift({
       id: uid(),
       who: 'mj',
-      text: pick.jp,
-      zh: pick.zh,
+      text: data.text,
+      card: !!data.card,
       imgs: [],
       ts: Date.now(),
       likes: 0,
@@ -278,6 +341,66 @@
     });
     save(list);
     render();
+  }
+
+  /* 让 TA 发一条：kind = 'card'（抽字卡）| 'ai'（现场写一句，失败就退回字卡） */
+  function mjPost(kind) {
+    if (kind !== 'ai') { pushMJ(cardPost()); return; }
+    aiMoment().then(function (text) {
+      pushMJ(text ? { text: text, card: false } : cardPost());
+    });
+  }
+
+  /* ── AI：接着最近的动态写一句 ── */
+
+  function aiCfg() {
+    try {
+      var c = JSON.parse(localStorage.getItem('cx_chuan_cfg') || '{}') || {};
+      if (!c || !c.key) return null;
+      return {
+        url: c.url || 'https://api.deepseek.com/chat/completions',
+        key: c.key,
+        model: c.model || 'deepseek-chat'
+      };
+    } catch (e) { return null; }
+  }
+
+  function recentLines(n) {
+    var list = load().slice(0, n);
+    var nm = names();
+    return list.map(function (p) {
+      var t = String(p.text || '').replace(/\n/g, ' ').slice(0, 60);
+      return (p.who === 'mj' ? nm.mj : nm.me) + '：' + t;
+    }).join('\n');
+  }
+
+  function aiMoment() {
+    var cfg = aiCfg();
+    if (!cfg) return Promise.resolve(null);
+
+    var nm = names();
+    var sys = '你在替一个人写他自己朋友圈里的动态。用第一人称，写他自己这一天的某个具体细节。'
+            + '要求：中文；一句话；25 字以内；口吻安静、克制、话少；不用感叹号，不用表情符号，不加引号；'
+            + '不要称呼任何人，不要出现别人的名字，不要对着谁说话；不要腻，不要空泛抒情；只输出这句话本身。';
+    var user = '这个人叫：' + nm.mj +
+               '\n最近发生的事（可以参考，也可以写别的）：\n' + (recentLines(5) || '（还没有）') +
+               '\n\n写一条新的。';
+
+    return fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+      body: JSON.stringify({
+        model: cfg.model,
+        messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
+        temperature: 1.0,
+        max_tokens: 90
+      })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      var t = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+      if (!t) return null;
+      t = String(t).replace(/^[\s"'“”「」]+|[\s"'“”「」]+$/g, '').split('\n')[0].trim();
+      return t ? t.slice(0, 44) : null;
+    }).catch(function () { return null; });
   }
 
   /* 打开时，如果 TA 很久没发过，可能冒一条 */
@@ -289,7 +412,7 @@
     }
     if (lastMJ && Date.now() - lastMJ.ts < 90 * 60 * 1000) return;
     if (Math.random() > 0.55) return;
-    setTimeout(function () { mjPost(); }, 900 + Math.random() * 900);
+    setTimeout(function () { mjPost(Math.random() < 0.2 ? 'ai' : 'card'); }, 900 + Math.random() * 900);
   }
 
   /* ── 发布面板 ── */
@@ -331,7 +454,7 @@
 
     var css = [
       '#cx-moments {',
-      '  position: fixed; inset: 0; z-index: 3300;',
+      '  position: fixed; inset: 0; z-index: 1900;',
       '  background: linear-gradient(180deg, #fdf9f4 0%, #f8f1e8 100%);',
       '  display: flex; flex-direction: column;',
       '  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;',
@@ -356,6 +479,9 @@
       '.cxm-ava { width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;',
       '  font-size: 14px; font-weight: 700; color: #fff; background: #c25b3f; }',
       '.cxm-ava.mj { background: #5b5a86; }',
+      '.cxm-ava img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }',
+      '.cxm-ava, .cxm-name { cursor: pointer; }',
+      '.cxm-ava:active, .cxm-name:active { opacity: .7; }',
       '.cxm-who { display: flex; flex-direction: column; min-width: 0; }',
       '.cxm-name { font-size: 13px; font-weight: 700; color: #3f362d; }',
       '.cxm-time { display: block; font-size: 11px; color: #a2937f; margin-top: 2px; }',
@@ -364,6 +490,16 @@
 
       '.cxm-text { font-size: 14px; line-height: 1.75; color: #332b24; margin: 10px 2px 0; word-break: break-word; white-space: normal; }',
       '.cxm-tr { font-size: 11.5px; line-height: 1.7; color: #b3a390; margin: 6px 2px 0; }',
+      '.cxm-card { margin-top: 10px; padding: 30px 26px 34px; border-radius: 12px; position: relative;',
+      '  background: linear-gradient(180deg, #fffdf8 0%, #f9f2e6 100%); border: 1px solid #eee1cf;',
+      '  box-shadow: inset 0 0 0 1px rgba(255,255,255,.65); }',
+      '.cxm-card p { margin: 0; font-size: 15px; line-height: 2.05; color: #3a3129; text-align: center;',
+      '  font-family: "Songti SC", "STSong", "SimSun", serif; letter-spacing: .8px; word-break: break-word; }',
+      '.cxm-card-mark { position: absolute; left: 14px; top: 6px; font-size: 30px; line-height: 1;',
+      '  color: #dfcdb4; font-family: Georgia, "Times New Roman", serif; }',
+      '.cxm-card-seal { position: absolute; right: 12px; bottom: 10px; width: 22px; height: 22px;',
+      '  border: 1px solid rgba(194,91,63,.65); border-radius: 3px; display: flex; align-items: center;',
+      '  justify-content: center; font-size: 10px; color: rgba(194,91,63,.8); }',
       '.cxm-pics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }',
       '.cxm-pics img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 10px; display: block; }',
       '.cxm-foot { display: flex; justify-content: flex-end; padding: 6px 0 2px; }',

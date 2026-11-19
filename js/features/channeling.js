@@ -174,6 +174,12 @@
   background: #c25b3f; color: #fff; font-size: 13px; cursor: pointer;
 }
 .cxch-send[disabled] { opacity: .45; }
+.cxch-mic {
+  flex: none; width: 38px; height: 38px; border-radius: 11px; border: 1px solid #ece3d8;
+  background: #fff; color: #a08b74; font-size: 13px; cursor: pointer;
+}
+.cxch-mic.cxch-rec { background: #c25b3f; border-color: #c25b3f; color: #fff; animation: cxchMic 1.3s ease-in-out infinite; }
+@keyframes cxchMic { 0%,100% { box-shadow: 0 0 0 0 rgba(194,91,63,.34); } 55% { box-shadow: 0 0 0 8px rgba(194,91,63,0); } }
 
 /* 档案 / 设置小层 */
 .cxch-layer {
@@ -236,6 +242,7 @@
       </header>
       <div class="cxch-scroll" id="cxch-scroll"></div>
       <footer class="cxch-input">
+        <button class="cxch-mic" id="cxch-mic" title="语音转文字"><i class="fas fa-microphone"></i></button>
         <input id="cxch-input" type="text" autocomplete="off" placeholder="回复传讯师…">
         <button class="cxch-send" id="cxch-send"><i class="fas fa-paper-plane"></i></button>
       </footer>
@@ -270,6 +277,65 @@
 
     document.getElementById('cxch-close').addEventListener('click', close);
     document.getElementById('cxch-send').addEventListener('click', send);
+
+    /* ── 语音转文字：点一下开始，说完再点一下结束 ── */
+    (function setupMic() {
+      const btn = document.getElementById('cxch-mic');
+      if (!btn) return;
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let rec = null, running = false, base = '';
+
+      btn.addEventListener('click', () => {
+        if (!SR) {
+          toast('这个浏览器用不了语音识别，先打字，或者用输入法自带的语音键');
+          return;
+        }
+        if (running) { try { rec.stop(); } catch (e) {} return; }
+
+        const input = document.getElementById('cxch-input');
+        base = input.value || '';
+        rec = new SR();
+        rec.lang = 'zh-CN';
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.maxAlternatives = 1;
+
+        rec.onstart = () => { running = true; btn.classList.add('cxch-rec'); };
+
+        rec.onresult = (e) => {
+          let fin = '', mid = '';
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const r = e.results[i];
+            if (r.isFinal) fin += r[0].transcript;
+            else mid += r[0].transcript;
+          }
+          input.value = base + fin + mid;
+        };
+
+        rec.onerror = (e) => {
+          running = false; btn.classList.remove('cxch-rec');
+          const map = {
+            'not-allowed': '没给麦克风权限',
+            'service-not-allowed': '这个浏览器不让用麦克风',
+            'no-speech': '没听到声音',
+            'audio-capture': '找不到麦克风',
+            'network': '识别服务连不上'
+          };
+          toast((map[e.error] || '语音识别出错了') + '，可以先打字，或用输入法的语音键');
+        };
+
+        rec.onend = () => {
+          running = false; btn.classList.remove('cxch-rec');
+          const i2 = document.getElementById('cxch-input');
+          if (i2) i2.focus();
+        };
+
+        try { rec.start(); } catch (err) {
+          running = false; btn.classList.remove('cxch-rec');
+          toast('麦克风起不来：' + (err.message || err));
+        }
+      });
+    })();
     document.getElementById('cxch-input').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
     document.getElementById('cxch-end').addEventListener('click', () => {
