@@ -670,9 +670,41 @@
     if (card) card.classList.remove('on');
   }
 
-  /* 他发来一条「查岗」，然后由她的选择接着聊 */
+  /* 他的话一律从字卡库随机抽，不用模型生成 */
+  function pickCard() {
+    try {
+      const arr = window._customReplies;
+      if (Array.isArray(arr)) {
+        const list = arr.map(function (x) { return String(x == null ? '' : x).trim(); })
+          .filter(function (x) { return x && x.indexOf('__TAROT__') !== 0; });
+        if (list.length) return list[Math.floor(Math.random() * list.length)];
+      }
+    } catch (e) {}
+    return '';
+  }
+
+  async function cardReplyOne() {
+    const t = pickCard();
+    await new Promise(function (r) { setTimeout(r, 600 + Math.random() * 900); });
+    if (!t) {
+      push({ text: '（字卡库还空着，去「字卡回复」里加几句吧）' });
+      return;
+    }
+    push({ text: t });
+  }
+
+  /* 他发来一条「查岗」，之后她的这句话用字卡回应 */
+  let reportFlow = false;
+  let reportFlowTimer = null;
+  function armReportFlow() {
+    reportFlow = true;
+    if (reportFlowTimer) clearTimeout(reportFlowTimer);
+    reportFlowTimer = setTimeout(function () { reportFlow = false; }, 5 * 60 * 1000);
+  }
+
   function reportAsked() {
     hideReport();
+    armReportFlow();
     push({ text: '查岗', tag: 'report' });
   }
 
@@ -1073,6 +1105,11 @@
     document.getElementById('cxch-send').disabled = true;
     input.value = '';
 
+    const useCard = (mode === 'chat' && reportFlow);
+    if (useCard) {
+      reportFlow = false;
+      if (reportFlowTimer) { clearTimeout(reportFlowTimer); reportFlowTimer = null; }
+    }
     const imgs = (mode === 'chat') ? pendingImgs.slice() : [];
     session.messages.push({ ts: Date.now(), who: 'me', text: text, imgs: imgs });
     saveSession();
@@ -1086,7 +1123,8 @@
     }
 
     try {
-      if (mode === 'chat') await chatReply(text, imgs);
+      if (useCard) await cardReplyOne();
+      else if (mode === 'chat') await chatReply(text, imgs);
       else await reply(text);
     } catch (e) {
       push({ text: '（这边卡了一下：' + String(e.message || e) + '。你再说一句，我接着。）' });

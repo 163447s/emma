@@ -29,6 +29,7 @@
                quick: [500, 1000, 3000, 5000, 10000],
                partner: [500, 1000, 2000, 3000, 5200, 10000] }
     };
+    // 他的话一律从字卡库随机抽；库空了才用这几句兜底
     var PARTNER_NOTES = ['给你买点想吃的', '拿着', '上次你请我，这次我请', '零花钱', '别省着'];
     var REPLY_AFTER_RED = ['…收到了', '你自己留着用', '太多了', '谢谢', '下次别给了'];
     var REPLY_AFTER_TRANSFER = ['收到了', '不用给我转', '下次别转了', '钱够用'];
@@ -42,6 +43,19 @@
 
     function rnd(a, b) { return a + Math.random() * (b - a); }
     function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+
+    /** 从字卡库随机抽一句（塔罗牌条目除外），库空时用兜底池 */
+    function cardPick(fallback) {
+        try {
+            var arr = window._customReplies;
+            if (Array.isArray(arr)) {
+                var list = arr.map(function (x) { return String(x == null ? '' : x).trim(); })
+                    .filter(function (x) { return x && x.indexOf('__TAROT__') !== 0; });
+                if (list.length) return pick(list);
+            }
+        } catch (e) {}
+        return fallback ? pick(fallback) : '';
+    }
     function money(n) { return '¥' + Number(n).toFixed(2); }
 
     /** 卡片/弹窗上的金额：人民币 ¥12.34，日元 1,000円 */
@@ -267,7 +281,7 @@
             if (typeof throttledSaveData === 'function') throttledSaveData();
             mountById(id);
             // 她收下之后的一句话
-            var text = pick(m.money.kind === 'transfer' ? REPLY_AFTER_TRANSFER : REPLY_AFTER_RED);
+            var text = cardPick(m.money.kind === 'transfer' ? REPLY_AFTER_TRANSFER : REPLY_AFTER_RED);
             addMessage({
                 id: Date.now() + Math.random(),
                 sender: partnerName(),
@@ -317,7 +331,7 @@
                 kind: k,
                 amount: amount,
                 currency: c,
-                note: pick(PARTNER_NOTES),
+                note: String(cardPick(PARTNER_NOTES) || '').slice(0, 30),
                 status: 'pending',
                 claimedBy: null
             }
