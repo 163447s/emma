@@ -261,6 +261,43 @@
 .cxch-tip { margin: 0; font-size: 10.5px; line-height: 1.6; color: #8a8178; }
 .cxch-primary { padding: 11px 0; border-radius: 11px; border: none; background: #c25b3f; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
 
+/* 查岗卡片 */
+.cxch-bell {
+  flex: none; width: 38px; height: 38px; border-radius: 11px; border: 1px solid #ece3d8;
+  background: #fff; color: #a08b74; font-size: 13px; cursor: pointer;
+  display: none; align-items: center; justify-content: center;
+}
+#cx-chuan[data-mode="chat"] .cxch-bell { display: inline-flex; }
+
+.cxch-report {
+  position: absolute; inset: 0; z-index: 3;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(54,42,32,.32); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.cxch-report.on { display: flex; }
+.cxch-report-card {
+  width: min(84%, 328px); background: #fff; border-radius: 20px;
+  padding: 24px 18px 18px; display: flex; flex-direction: column; align-items: center;
+  box-shadow: 0 18px 48px rgba(60,40,20,.24);
+}
+.cxch-report-av {
+  width: 58px; height: 58px; border-radius: 50%; overflow: hidden;
+  background: #f2e9dd; display: flex; align-items: center; justify-content: center;
+  border: 2px solid #fff; box-shadow: 0 3px 10px rgba(90,64,40,.14);
+}
+.cxch-report-av img { width: 100%; height: 100%; object-fit: cover; }
+.cxch-report-av i { color: #c9b6a0; font-size: 22px; }
+.cxch-report-from { margin-top: 9px; font-size: 11.5px; color: #9a9086; letter-spacing: .2px; }
+.cxch-report-from b { color: #4878c8; font-weight: 500; }
+.cxch-report-title { margin: 13px 0 20px; font-size: 27px; font-weight: 700; color: #1e1b18; letter-spacing: 3px; }
+.cxch-report-btn {
+  width: 100%; height: 46px; border-radius: 12px; border: none;
+  background: #f4f3f5; color: #1e1b18; font-size: 15px; font-weight: 600;
+  margin-top: 10px; cursor: pointer; transition: transform .12s ease;
+}
+.cxch-report-btn:active { transform: scale(.98); }
+.cxch-report-btn.red { background: #d15348; color: #fff; margin-top: 16px; }
+
 /* 电脑宽屏上收窄，像一个手机屏 */
 @media (min-width: 640px) {
   .cxch-head, .cxch-scroll, .cxch-input { width: 100%; max-width: 620px; margin-left: auto; margin-right: auto; }
@@ -295,9 +332,21 @@
       <div class="cxch-preview" id="cxch-preview"></div>
       <footer class="cxch-input">
         <button class="cxch-img" id="cxch-img" title="发图片"><i class="fas fa-image"></i></button>
+        <button class="cxch-bell" id="cxch-bell" title="让他来查岗"><i class="fas fa-bell"></i></button>
         <input id="cxch-input" type="text" autocomplete="off" placeholder="回复传讯师…">
         <button class="cxch-send" id="cxch-send"><i class="fas fa-paper-plane"></i></button>
       </footer>
+
+      <div class="cxch-report" id="cxch-report">
+        <div class="cxch-report-card">
+          <div class="cxch-report-av"><i class="fas fa-user"></i></div>
+          <div class="cxch-report-from">来自 传讯 · <b id="cxch-report-name">梦角</b></div>
+          <div class="cxch-report-title">查岗</div>
+          <button class="cxch-report-btn" id="cxch-report-text">文字报备</button>
+          <button class="cxch-report-btn" id="cxch-report-photo">拍照报备</button>
+          <button class="cxch-report-btn red" id="cxch-report-no">拒绝报备</button>
+        </div>
+      </div>
 
       <div class="cxch-layer cx-off" id="cxch-arc-layer">
         <div class="cxch-sheet">
@@ -338,7 +387,16 @@
       compressImg(f, 1280).then(function (b64) {
         pendingImgs = [b64];
         renderPreview();
-      }).catch(function () { toast('这张图读不出来，换一张'); });
+        if (reportPending) {
+          reportPending = false;
+          const inp = document.getElementById('cxch-input');
+          if (inp && !inp.value.trim()) inp.value = '报备';
+          send();
+        }
+      }).catch(function () {
+        reportPending = false;
+        toast('这张图读不出来，换一张');
+      });
     });
 
     scrollEl.addEventListener('click', function (e) {
@@ -357,6 +415,31 @@
     document.getElementById('cxch-input').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
     document.getElementById('cxch-mode').addEventListener('click', switchMode);
+
+    document.getElementById('cxch-bell').addEventListener('click', function () {
+      if (mode !== 'chat') { toast('查岗在聊天里用'); return; }
+      if (busy) { toast('等他说完这句'); return; }
+      showReport();
+    });
+
+    document.getElementById('cxch-report-text').addEventListener('click', function () {
+      reportAsked();
+      const inp = document.getElementById('cxch-input');
+      if (inp) { inp.placeholder = '报备一下…'; inp.focus(); }
+    });
+
+    document.getElementById('cxch-report-photo').addEventListener('click', function () {
+      reportAsked();
+      reportPending = true;
+      imgFile.value = '';
+      imgFile.click();
+    });
+
+    document.getElementById('cxch-report-no').addEventListener('click', function () {
+      reportAsked();
+      const inp = document.getElementById('cxch-input');
+      if (inp) { inp.value = '不想报备'; send(); }
+    });
 
     document.getElementById('cxch-img').addEventListener('click', () => {
       if (mode !== 'chat') { toast('发图要在聊天模式里用'); return; }
@@ -445,7 +528,9 @@
             return '<img class="cxch-pic" src="' + src + '" alt="">';
           }).join('') + '</div>'
         : '';
-      const body = (mode === 'chuan') ? decorate(m.text || '') : escText(m.text || '');
+      const body = (mode === 'chuan')
+        ? decorate(m.text || '')
+        : (m.tag === 'report' ? '🔔 ' + escText(m.text || '') : escText(m.text || ''));
       wrap.innerHTML = (body ? '<div class="cxch-bubble">' + body + '</div>' : '') + pics +
         '<div class="cxch-time">' + fmtTime(m.ts) + '</div>';
       scrollEl.appendChild(wrap);
@@ -553,6 +638,63 @@
     if (timeEl) wrap.insertBefore(chip, timeEl); else wrap.appendChild(chip);
   }
 
+  /* ── 查岗 ── */
+
+  const REPORT_KEY = 'cx_report_last';
+  let reportTimer = null;
+  let lastActive = Date.now();
+  let reportPending = false;
+
+  function mjAvatarSrc() {
+    try {
+      const img = document.querySelector('#partner-avatar img');
+      return img ? img.src : '';
+    } catch (e) { return ''; }
+  }
+
+  function showReport() {
+    if (!root) return;
+    const card = document.getElementById('cxch-report');
+    if (!card) return;
+    const av = card.querySelector('.cxch-report-av');
+    const src = mjAvatarSrc();
+    if (av) av.innerHTML = src ? '<img src="' + src + '" alt="">' : '<i class="fas fa-user"></i>';
+    const nameEl = document.getElementById('cxch-report-name');
+    if (nameEl) nameEl.textContent = mjName();
+    card.classList.add('on');
+    try { localStorage.setItem(REPORT_KEY, String(Date.now())); } catch (e) {}
+  }
+
+  function hideReport() {
+    const card = document.getElementById('cxch-report');
+    if (card) card.classList.remove('on');
+  }
+
+  /* 他发来一条「查岗」，然后由她的选择接着聊 */
+  function reportAsked() {
+    hideReport();
+    push({ text: '查岗', tag: 'report' });
+  }
+
+  function startReportLoop() {
+    stopReportLoop();
+    reportTimer = setInterval(function () {
+      if (mode !== 'chat' || busy) return;
+      const card = document.getElementById('cxch-report');
+      if (card && card.classList.contains('on')) return;
+      const inp = document.getElementById('cxch-input');
+      if (inp && inp.value.trim()) return;
+      if (Date.now() - lastActive < 100000) return;
+      let last = 0;
+      try { last = parseInt(localStorage.getItem(REPORT_KEY) || '0', 10) || 0; } catch (e) {}
+      if (Date.now() - last < 40 * 60 * 1000) return;
+      if ((session.messages || []).length < 4) return;
+      if (Math.random() > 0.32) return;
+      showReport();
+    }, 30000);
+  }
+  function stopReportLoop() { if (reportTimer) { clearInterval(reportTimer); reportTimer = null; } }
+
   /* ── 聊天模式的图片 ── */
 
   function compressImg(file, maxW) {
@@ -604,6 +746,7 @@
     mode = (mode === 'chat') ? 'chuan' : 'chat';
     try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
     pendingImgs = [];
+    hideReport();
     session = loadSession();
     if (!session || !session.messages.length) {
       if (mode === 'chat') newChat(); else newSession();
@@ -925,6 +1068,7 @@
     const hasPic = (mode === 'chat' && pendingImgs.length > 0);
     if (!text && !hasPic) return;
 
+    lastActive = Date.now();
     busy = true;
     document.getElementById('cxch-send').disabled = true;
     input.value = '';
@@ -956,6 +1100,8 @@
       }
       busy = false;
       document.getElementById('cxch-send').disabled = false;
+      const ph = document.getElementById('cxch-input');
+      if (ph) ph.placeholder = (mode === 'chat') ? '说点什么…' : '回复传讯师…';
       requestAnimationFrame(() => { scrollEl.scrollTop = scrollEl.scrollHeight; });
       input.focus();
     }
@@ -1055,10 +1201,14 @@
     applyMode();
     paint();
     setStep();
+    lastActive = Date.now();
+    startReportLoop();
     setTimeout(() => { const i = document.getElementById('cxch-input'); if (i) i.focus(); }, 200);
   }
 
   function close() {
+    stopReportLoop();
+    hideReport();
     if (root) root.classList.add('cx-off');
     if (window.CxLauncher) window.CxLauncher.showHome();
   }
