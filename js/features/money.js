@@ -16,8 +16,9 @@
     // ── 可调参数 ───────────────────────────────────────────────
     var START_BALANCE = 520;          // 用户初始钱包余额
     var PARTNER_START = 600;          // 梦角初始余额
-    var AUTO_FIRST_HOURS = [4, 12];   // 她第一笔：4–12 小时后
-    var AUTO_LOOP_HOURS = [12, 36];   // 之后：12–36 小时一笔
+    // 他主动发来：跟聊天里的查岗、拍一拍同一档概率，3%
+    var MONEY_CHANCE = 0.03;
+    var MONEY_COOLDOWN = 4 * 3600 * 1000;   // 四小时内不会连着发
     var CLAIM_DELAY = [8000, 20000];   // 你发出去的红包，她多久后收（毫秒）
 
     // 两种钱：人民币（带小数）和日元（整数，写法 xx 円）
@@ -81,7 +82,7 @@
         var fallback = {
             balance: START_BALANCE,
             partner: PARTNER_START,
-            nextAt: Date.now() + rnd(AUTO_FIRST_HOURS[0], AUTO_FIRST_HOURS[1]) * 3600000,
+            nextAt: 0,
             lastAt: 0
         };
         if (!window.localforage) { state = fallback; return Promise.resolve(state); }
@@ -346,20 +347,23 @@
         } catch (e) {}
     }
 
-    /** 按时间表决定要不要来一笔（定时器每 30 分钟跑一次） */
-    function checkAuto() {
-        if (!state) return;
-        var now = Date.now();
-        if (!state.nextAt) {
-            state.nextAt = now + rnd(AUTO_FIRST_HOURS[0], AUTO_FIRST_HOURS[1]) * 3600000;
-            saveState();
-            return;
-        }
-        if (now < state.nextAt) return;
-        state.nextAt = now + rnd(AUTO_LOOP_HOURS[0], AUTO_LOOP_HOURS[1]) * 3600000;
-        state.lastAt = now;
+    /** 3% 掷一次骰子，中了才发；冷却期内不发 */
+    function chanceSend() {
+        if (!state) return false;
+        if (document.hidden) return false;
+        var last = Number(state.lastAt || 0);
+        if (Date.now() - last < MONEY_COOLDOWN) return false;
+        if (Math.random() >= MONEY_CHANCE) return false;
+        state.lastAt = Date.now();
         saveState();
         partnerSend();
+        return true;
+    }
+
+    /** 定时器每 30 分钟也掷一次（你不聊天的时候他也能偶尔来一笔） */
+    function checkAuto() {
+        if (!state) return;
+        chanceSend();
     }
 
     /* ═══════════════ 七、面板（发红包 / 发转账） ═══════════════ */
@@ -638,6 +642,7 @@
         close: closePanel,
         send: sendMoney,
         partnerSend: partnerSend,       // 手动让她发一笔（测试用）
+        chance: chanceSend,             // 3% 掷一次（聊天每轮结束时调用）
         balance: function () { return state ? state.balance : null; },
         mount: mountAll
     };

@@ -1137,7 +1137,12 @@
       document.getElementById('cxch-send').disabled = false;
       const ph = document.getElementById('cxch-input');
       if (ph) ph.placeholder = (mode === 'chat') ? '说点什么…' : '回复传讯师…';
-      if (mode === 'chat' && !useCard) setTimeout(maybeReport, 2500);
+      if (mode === 'chat' && !useCard) {
+        setTimeout(maybeReport, 2500);
+        setTimeout(function () {
+          try { if (window.MoneyBox && window.MoneyBox.chance) window.MoneyBox.chance(); } catch (e) {}
+        }, 4000);
+      }
       requestAnimationFrame(() => { scrollEl.scrollTop = scrollEl.scrollHeight; });
       input.focus();
     }
