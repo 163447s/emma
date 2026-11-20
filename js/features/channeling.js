@@ -178,6 +178,17 @@
 .cxch-msg.you .cxch-bubble { background: #fff; color: #2b2723; border: 1px solid #ece3d8; border-bottom-left-radius: 5px; }
 .cxch-time { font-size: 9.5px; color: #b9ae9f; margin-top: 4px; padding: 0 3px; }
 
+/* 偷走这句话 */
+.cxch-steal {
+  align-self: flex-end; display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 3px; padding: 4px 11px; border-radius: 999px;
+  background: #fffdf9; border: 1px solid #ecdcc8; color: #9a7a58;
+  font-size: 11.5px; letter-spacing: .3px; cursor: pointer;
+  box-shadow: 0 2px 9px rgba(120,90,60,.10);
+}
+.cxch-steal span { color: #c25b3f; font-weight: 600; max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxch-steal.done { color: #8a9b78; border-color: #d9e2cf; background: #f7faf3; cursor: default; }
+
 /* 括号＝传讯师旁白 */
 .cxch-aside { color: #8b7f9a; font-size: 12.5px; }
 
@@ -330,6 +341,16 @@
       }).catch(function () { toast('这张图读不出来，换一张'); });
     });
 
+    scrollEl.addEventListener('click', function (e) {
+      if (mode !== 'chat') return;
+      if (e.target.closest && e.target.closest('.cxch-steal')) return;
+      const bubble = e.target.closest ? e.target.closest('.cxch-bubble') : null;
+      if (!bubble) return;
+      const wrap = bubble.closest('.cxch-msg');
+      if (!wrap || !wrap.classList.contains('me')) return;
+      toggleSteal(wrap);
+    });
+
     document.getElementById('cxch-close').addEventListener('click', close);
     document.getElementById('cxch-send').addEventListener('click', send);
 
@@ -415,9 +436,10 @@
 
   function paint() {
     scrollEl.innerHTML = '';
-    session.messages.forEach(m => {
+    session.messages.forEach((m, idx) => {
       const wrap = document.createElement('div');
       wrap.className = 'cxch-msg ' + (m.who === 'me' ? 'me' : 'you');
+      wrap.dataset.idx = String(idx);
       const pics = (m.imgs && m.imgs.length)
         ? '<div class="cxch-pics">' + m.imgs.map(function (src) {
             return '<img class="cxch-pic" src="' + src + '" alt="">';
@@ -455,6 +477,80 @@
     return String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
+  }
+
+  /* ── 偷走这句话，收进字卡 ── */
+
+  let stealHintShown = false;
+  try { stealHintShown = localStorage.getItem('cx_steal_hint') === '1'; } catch (e) {}
+
+  function stealStoreKey() {
+    const pre = window.APP_PREFIX || 'CHAT_APP_V3_';
+    let sid = '';
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(pre) === 0) {
+          const rest = k.slice(pre.length);
+          const cut = rest.indexOf('_');
+          if (cut > 0) { sid = rest.slice(0, cut); break; }
+        }
+      }
+    } catch (e) {}
+    return { pre: pre, sid: sid };
+  }
+
+  async function doSteal(text, chip) {
+    let arr = window._customReplies;
+    if (!Array.isArray(arr)) { arr = []; window._customReplies = arr; }
+    if (arr.some(function (x) { return String(x == null ? '' : x).trim() === text; })) {
+      chip.className = 'cxch-steal done';
+      chip.textContent = '这句已经在字卡里了';
+      setTimeout(function () { if (chip.parentNode) chip.remove(); }, 2200);
+      return;
+    }
+    arr.push(text);
+
+    // 存进原站的 customReplies（localforage，键名跟站内一致）
+    try {
+      const st = stealStoreKey();
+      let sid = st.sid;
+      if (!sid && window.localforage) {
+        try { sid = await localforage.getItem(st.pre + 'lastSessionId'); } catch (e) {}
+      }
+      if (sid && window.localforage) {
+        await localforage.setItem(st.pre + sid + '_customReplies', arr);
+      }
+    } catch (e) {}
+
+    chip.className = 'cxch-steal done';
+    chip.textContent = '偷走了，进字卡了';
+    toast('偷走了你的「' + (text.length > 12 ? text.slice(0, 12) + '…' : text) + '」');
+    setTimeout(function () { if (chip.parentNode) chip.remove(); }, 2400);
+  }
+
+  function toggleSteal(wrap) {
+    const existing = wrap.querySelector('.cxch-steal');
+    if (existing) { existing.remove(); return; }
+    scrollEl.querySelectorAll('.cxch-steal').forEach(function (x) { x.remove(); });
+
+    const i = parseInt(wrap.dataset.idx, 10);
+    const m = session.messages[i];
+    if (!m) return;
+    const text = String(m.text || '').trim();
+    if (!text) return;
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'cxch-steal';
+    chip.innerHTML = '✂ 偷走这句<span>' + escText(text.length > 12 ? text.slice(0, 12) + '…' : text) + '</span>';
+    chip.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (chip.classList.contains('done')) return;
+      doSteal(text, chip);
+    });
+    const timeEl = wrap.querySelector('.cxch-time');
+    if (timeEl) wrap.insertBefore(chip, timeEl); else wrap.appendChild(chip);
   }
 
   /* ── 聊天模式的图片 ── */
@@ -853,6 +949,11 @@
     } finally {
       untyping();
       setStep();
+      if (!stealHintShown && session.messages.length > 2) {
+        stealHintShown = true;
+        try { localStorage.setItem('cx_steal_hint', '1'); } catch (e) {}
+        setTimeout(function () { toast('点一下自己发的话，可以把那句收进字卡'); }, 900);
+      }
       busy = false;
       document.getElementById('cxch-send').disabled = false;
       requestAnimationFrame(() => { scrollEl.scrollTop = scrollEl.scrollHeight; });
