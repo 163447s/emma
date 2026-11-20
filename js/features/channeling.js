@@ -641,7 +641,6 @@
   /* ── 查岗 ── */
 
   const REPORT_KEY = 'cx_report_last';
-  let reportTimer = null;
   let lastActive = Date.now();
   let reportPending = false;
 
@@ -708,24 +707,22 @@
     push({ text: '查岗', tag: 'report' });
   }
 
-  function startReportLoop() {
-    stopReportLoop();
-    reportTimer = setInterval(function () {
-      if (mode !== 'chat' || busy) return;
-      const card = document.getElementById('cxch-report');
-      if (card && card.classList.contains('on')) return;
-      const inp = document.getElementById('cxch-input');
-      if (inp && inp.value.trim()) return;
-      if (Date.now() - lastActive < 100000) return;
-      let last = 0;
-      try { last = parseInt(localStorage.getItem(REPORT_KEY) || '0', 10) || 0; } catch (e) {}
-      if (Date.now() - last < 40 * 60 * 1000) return;
-      if ((session.messages || []).length < 4) return;
-      if (Math.random() > 0.32) return;
-      showReport();
-    }, 30000);
+  /* 概率向「打视频电话」看齐，压得很低：每回完一轮 3%，且一小时内只会有一次 */
+  const REPORT_CHANCE = 0.03;
+  const REPORT_COOLDOWN = 60 * 60 * 1000;
+
+  function maybeReport() {
+    if (mode !== 'chat' || busy) return;
+    const card = document.getElementById('cxch-report');
+    if (card && card.classList.contains('on')) return;
+    if (reportFlow) return;
+    if ((session.messages || []).length < 6) return;
+    let last = 0;
+    try { last = parseInt(localStorage.getItem(REPORT_KEY) || '0', 10) || 0; } catch (e) {}
+    if (Date.now() - last < REPORT_COOLDOWN) return;
+    if (Math.random() >= REPORT_CHANCE) return;
+    showReport();
   }
-  function stopReportLoop() { if (reportTimer) { clearInterval(reportTimer); reportTimer = null; } }
 
   /* ── 聊天模式的图片 ── */
 
@@ -1140,6 +1137,7 @@
       document.getElementById('cxch-send').disabled = false;
       const ph = document.getElementById('cxch-input');
       if (ph) ph.placeholder = (mode === 'chat') ? '说点什么…' : '回复传讯师…';
+      if (mode === 'chat' && !useCard) setTimeout(maybeReport, 2500);
       requestAnimationFrame(() => { scrollEl.scrollTop = scrollEl.scrollHeight; });
       input.focus();
     }
@@ -1240,12 +1238,10 @@
     paint();
     setStep();
     lastActive = Date.now();
-    startReportLoop();
     setTimeout(() => { const i = document.getElementById('cxch-input'); if (i) i.focus(); }, 200);
   }
 
   function close() {
-    stopReportLoop();
     hideReport();
     if (root) root.classList.add('cx-off');
     if (window.CxLauncher) window.CxLauncher.showHome();
