@@ -181,6 +181,74 @@
         });
     }
 
+    /* 去掉结尾的括号译文，拿到原句 */
+    function bareText(s) {
+        return String(s == null ? '' : s).replace(/[（(][^（）()]{1,120}[）)]\s*$/, '').trim();
+    }
+
+    /* 更宽松的比较键：去掉空格与常见标点 */
+    function looseKey(s) {
+        return bareText(s).replace(/[\s，,。.、！!？?…~～「」『』"'“”（）()]/g, '');
+    }
+
+    /* 分组修复：当初翻译时分组里存的还是原句，现在对不上就全变「未分组」了。
+       这里按「原句 → 现在的正式文本」把分组条目改回来，各回各家，不动顺序。 */
+    function repairGroups() {
+        var gs = groupsPool();
+        var cards = pool();
+        if (!gs || !gs.length || !cards || !cards.length) return 0;
+
+        var exact = {}, byBare = {}, byLoose = {};
+        for (var i = 0; i < cards.length; i++) {
+            var c = String(cards[i] == null ? '' : cards[i]).trim();
+            if (!c) continue;
+            exact[c] = c;
+            var b = bareText(c);
+            if (b && !byBare[b]) byBare[b] = c;
+            var l = looseKey(c);
+            if (l && !byLoose[l]) byLoose[l] = c;
+        }
+
+        var fixed = 0;
+        gs.forEach(function (g) {
+            if (!g || !Array.isArray(g.items)) return;
+
+            var out = [];
+            var seen = {};
+            for (var j = 0; j < g.items.length; j++) {
+                var it = String(g.items[j] == null ? '' : g.items[j]).trim();
+                if (!it) continue;
+
+                var full = exact[it];
+                if (!full) full = byBare[it] || byLoose[looseKey(it)] || byBare[bareText(it)];
+
+                if (full && full !== it) { fixed++; }
+                if (!full) full = it;          // 实在对不上就原样留着
+
+                if (!seen[full]) { seen[full] = 1; out.push(full); }
+            }
+
+            if (out.length !== g.items.length) fixed++;
+            g.items.length = 0;
+            for (var k = 0; k < out.length; k++) g.items.push(out[k]);
+        });
+
+        if (fixed) {
+            try { if (typeof customReplyGroups !== 'undefined' && Array.isArray(customReplyGroups)) customReplyGroups = gs; } catch (e) {}
+            try { window.customReplyGroups = gs; } catch (e) {}
+            try {
+                var k2 = getStorageKey('customReplyGroups');
+                if (k2) localforage.setItem(k2, gs);
+            } catch (e) {}
+            try { if (typeof throttledSaveData === 'function') throttledSaveData(); } catch (e) {}
+            refreshList();
+            try {
+                if (typeof showNotification === 'function') showNotification('✓ 已把 ' + fixed + ' 条字卡放回原来的分组', 'success', 3000);
+            } catch (e) {}
+        }
+        return fixed;
+    }
+
     /* 批量补齐 */
     function scan() {
         if (running) return;
@@ -233,6 +301,7 @@
             running = false;
             var p = pool();
             if (p) persist(p);
+            repairGroups();                       // 每轮补完顺手把分组归位
             if (fixed) {
                 try {
                     if (typeof showNotification === 'function') showNotification('✓ 已给 ' + fixed + ' 条字卡补上日语翻译', 'success', 3000);
@@ -244,8 +313,8 @@
     }
 
     function boot() {
-        setTimeout(scan, 2500);          // 打开页面先补一遍老字卡
-        setInterval(scan, 45 * 1000);    // 之后新加的字卡自动跟上
+        setTimeout(function () { repairGroups(); scan(); }, 2500);   // 打开就先归组、再补翻译
+        setInterval(function () { repairGroups(); scan(); }, 45 * 1000);
     }
 
     if (document.readyState === 'loading') {
@@ -254,5 +323,5 @@
         boot();
     }
 
-    window.CardTrans = { fill: fill, scan: scan, compose: compose };
+    window.CardTrans = { fill: fill, scan: scan, compose: compose, repair: repairGroups };
 })();
