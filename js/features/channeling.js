@@ -15,21 +15,8 @@
 
   const CFG_KEY = 'cx_chuan_cfg';
   const OFFICIAL_URL = 'https://api.deepseek.com/chat/completions';
-  // 内置的 Key：设置里不填就用它，免得换浏览器/换设备聊不了
-  const DEFAULT_KEY = 'sk-d2844d399fb54e539f8d14527ab4ba58';
   const SESSION_KEY = 'cx_chuan_session';
   const ARCHIVE_KEY = 'cx_chuan_archive';
-  const CHAT_KEY = 'cx_chat_session';
-  const MODE_KEY = 'cx_chuan_mode';
-
-  /* 普通聊天用的提示词：就是正常陪聊，语气自然，不说教 */
-  const CHAT_SYS = [
-    '你在和一个女生聊天，用中文，口语，像认识很久的朋友。',
-    '她可能会聊到自己的情绪、生活琐事、喜欢的人和角色，你就正常接话。',
-    '要求：不端着，不说教，不硬塞道理，不每句都反问，不重复她刚说的话；',
-    '有长短节奏，一般三到五句以内；可以有态度，可以不同意，但不要刻意讨好。',
-    '不要主动提建议，除非她问；不要总结她说了什么；不要用“作为你的朋友”这类开场。'
-  ].join('\n');
 
   const OPENING =
     'OK，开始前麻烦宝宝回答我几个问题\n\n' +
@@ -86,21 +73,15 @@
   let scrollEl = null;
   let busy = false;
   let session = null;   // {step, answers, info, cards, startedAt, messages:[{who:'me'|'you', text, ts}]}
-  let mode = 'chuan';   // 'chuan' 传讯 | 'chat' 普通聊天
-  let pendingImgs = []; // 聊天模式里待发送的图片（base64）
 
   /* ── 配置 ── */
 
   function getCfg() {
-    let c;
     try {
-      c = Object.assign({ url: OFFICIAL_URL, key: '', model: 'deepseek-chat' }, JSON.parse(localStorage.getItem(CFG_KEY) || '{}'));
+      return Object.assign({ url: OFFICIAL_URL, key: '', model: 'deepseek-chat' }, JSON.parse(localStorage.getItem(CFG_KEY) || '{}'));
     } catch (e) {
-      c = { url: OFFICIAL_URL, key: '', model: 'deepseek-chat' };
+      return { url: OFFICIAL_URL, key: '', model: 'deepseek-chat' };
     }
-    // 留空就用内置那把，换设备不用重新填
-    if (/api\.deepseek\.com/i.test(c.url) && !String(c.key || '').trim()) c.key = DEFAULT_KEY;
-    return c;
   }
   function setCfg(cfg) {
     try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) {}
@@ -108,29 +89,21 @@
 
   /* ── 会话存取 ── */
 
-  function activeKey() { return mode === 'chat' ? CHAT_KEY : SESSION_KEY; }
-
   function loadSession() {
     try {
-      const s = JSON.parse(localStorage.getItem(activeKey()) || 'null');
+      const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
       if (s && Array.isArray(s.messages)) return s;
     } catch (e) {}
     return null;
   }
   function saveSession() {
-    try { localStorage.setItem(activeKey(), JSON.stringify(session)); } catch (e) {}
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch (e) {}
   }
 
   function newSession() {
     session = { step: 1, answers: null, info: null, cards: null, startedAt: Date.now(), messages: [] };
     push({ who: 'you', text: OPENING });
     saveSession();
-  }
-
-  /* 普通聊天：直接开一段对话，没有那套步骤 */
-  function newChat() {
-    session = { step: 0, answers: null, info: null, cards: null, startedAt: Date.now(), messages: [] };
-    push({ who: 'you', text: '嗯，我在。想聊什么就说，想发图也行。' });
   }
 
   /* ── 渲染 ── */
@@ -166,7 +139,7 @@
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding: 14px; display: flex; flex-direction: column; gap: 10px;
 }
-.cxch-msg { display: flex; flex-direction: column; gap: 6px; max-width: 82%; }
+.cxch-msg { display: flex; flex-direction: column; max-width: 82%; }
 .cxch-msg.me { align-self: flex-end; align-items: flex-end; }
 .cxch-msg.you { align-self: flex-start; align-items: flex-start; }
 .cxch-bubble {
@@ -177,23 +150,6 @@
 .cxch-msg.me .cxch-bubble { background: #c25b3f; color: #fff; border-bottom-right-radius: 5px; }
 .cxch-msg.you .cxch-bubble { background: #fff; color: #2b2723; border: 1px solid #ece3d8; border-bottom-left-radius: 5px; }
 .cxch-time { font-size: 9.5px; color: #b9ae9f; margin-top: 4px; padding: 0 3px; }
-
-/* 偷走这句话 */
-.cxch-steal {
-  align-self: flex-end; display: inline-flex; align-items: center; gap: 5px;
-  margin-top: 3px; padding: 4px 11px; border-radius: 999px;
-  background: #fffdf9; border: 1px solid #ecdcc8; color: #9a7a58;
-  font-size: 11.5px; letter-spacing: .3px; cursor: pointer;
-  box-shadow: 0 2px 9px rgba(120,90,60,.10);
-}
-.cxch-steal span { color: #c25b3f; font-weight: 600; max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cxch-steal.done { color: #8a9b78; border-color: #d9e2cf; background: #f7faf3; cursor: default; }
-.cxch-steal-mini {
-  align-self: flex-end; margin-top: 1px; padding: 0 3px; border: none; background: none;
-  color: #b6a893; font-size: 10.5px; letter-spacing: .4px; cursor: pointer;
-}
-.cxch-steal-mini:hover { color: #c25b3f; }
-.cxch-steal-mini.done { color: #8a9b78; cursor: default; }
 
 /* 括号＝传讯师旁白 */
 .cxch-aside { color: #8b7f9a; font-size: 12.5px; }
@@ -218,24 +174,6 @@
   background: #c25b3f; color: #fff; font-size: 13px; cursor: pointer;
 }
 .cxch-send[disabled] { opacity: .45; }
-
-/* 聊天模式：图片按钮 + 预览 */
-.cxch-img {
-  flex: none; width: 38px; height: 38px; border-radius: 11px; border: 1px solid #ece3d8;
-  background: #fff; color: #a08b74; font-size: 13px; cursor: pointer;
-  display: none; align-items: center; justify-content: center;
-}
-#cx-chuan[data-mode="chat"] .cxch-img { display: inline-flex; }
-.cxch-preview { flex: none; display: none; gap: 8px; padding: 8px 12px 0; }
-.cxch-preview.on { display: flex; }
-.cxch-pv { position: relative; width: 58px; height: 58px; border-radius: 8px; overflow: hidden; border: 1px solid #ece3d8; }
-.cxch-pv img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.cxch-pv button {
-  position: absolute; top: 0; right: 0; width: 18px; height: 18px; border: none;
-  border-radius: 0 0 0 6px; background: rgba(0,0,0,.45); color: #fff; font-size: 10px; cursor: pointer;
-}
-.cxch-pics { display: flex; flex-direction: column; gap: 6px; }
-.cxch-pic { width: 230px; max-width: 58vw; max-height: 320px; object-fit: cover; border-radius: 10px; display: block; box-shadow: 0 2px 10px rgba(120,90,60,.16); }
 
 /* 档案 / 设置小层 */
 .cxch-layer {
@@ -267,43 +205,6 @@
 .cxch-tip { margin: 0; font-size: 10.5px; line-height: 1.6; color: #8a8178; }
 .cxch-primary { padding: 11px 0; border-radius: 11px; border: none; background: #c25b3f; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
 
-/* 查岗卡片 */
-.cxch-bell {
-  flex: none; width: 38px; height: 38px; border-radius: 11px; border: 1px solid #ece3d8;
-  background: #fff; color: #a08b74; font-size: 13px; cursor: pointer;
-  display: none; align-items: center; justify-content: center;
-}
-#cx-chuan[data-mode="chat"] .cxch-bell { display: inline-flex; }
-
-.cxch-report {
-  position: absolute; inset: 0; z-index: 3;
-  display: none; align-items: center; justify-content: center;
-  background: rgba(54,42,32,.32); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-}
-.cxch-report.on { display: flex; }
-.cxch-report-card {
-  width: min(84%, 328px); background: #fff; border-radius: 20px;
-  padding: 24px 18px 18px; display: flex; flex-direction: column; align-items: center;
-  box-shadow: 0 18px 48px rgba(60,40,20,.24);
-}
-.cxch-report-av {
-  width: 58px; height: 58px; border-radius: 50%; overflow: hidden;
-  background: #f2e9dd; display: flex; align-items: center; justify-content: center;
-  border: 2px solid #fff; box-shadow: 0 3px 10px rgba(90,64,40,.14);
-}
-.cxch-report-av img { width: 100%; height: 100%; object-fit: cover; }
-.cxch-report-av i { color: #c9b6a0; font-size: 22px; }
-.cxch-report-from { margin-top: 9px; font-size: 11.5px; color: #9a9086; letter-spacing: .2px; }
-.cxch-report-from b { color: #4878c8; font-weight: 500; }
-.cxch-report-title { margin: 13px 0 20px; font-size: 27px; font-weight: 700; color: #1e1b18; letter-spacing: 3px; }
-.cxch-report-btn {
-  width: 100%; height: 46px; border-radius: 12px; border: none;
-  background: #f4f3f5; color: #1e1b18; font-size: 15px; font-weight: 600;
-  margin-top: 10px; cursor: pointer; transition: transform .12s ease;
-}
-.cxch-report-btn:active { transform: scale(.98); }
-.cxch-report-btn.red { background: #d15348; color: #fff; margin-top: 16px; }
-
 /* 电脑宽屏上收窄，像一个手机屏 */
 @media (min-width: 640px) {
   .cxch-head, .cxch-scroll, .cxch-input { width: 100%; max-width: 620px; margin-left: auto; margin-right: auto; }
@@ -326,33 +227,18 @@
       <header class="cxch-head">
         <button class="cxch-btn" id="cxch-close"><i class="fas fa-chevron-left"></i></button>
         <div class="cxch-title">
-          <span id="cxch-tname">传讯室</span>
+          <span>传讯室</span>
           <em id="cxch-step">第 1 步 · 开场</em>
         </div>
-        <button class="cxch-btn" id="cxch-mode" title="切换：传讯 / 聊天"><i class="fas fa-comments"></i></button>
         <button class="cxch-btn" id="cxch-cfg" title="接口设置"><i class="fas fa-sliders-h"></i></button>
         <button class="cxch-btn" id="cxch-archive" title="传讯档案"><i class="fas fa-book-open"></i></button>
         <button class="cxch-btn" id="cxch-end" title="结束并归档"><i class="fas fa-circle-check"></i></button>
       </header>
       <div class="cxch-scroll" id="cxch-scroll"></div>
-      <div class="cxch-preview" id="cxch-preview"></div>
       <footer class="cxch-input">
-        <button class="cxch-img" id="cxch-img" title="发图片"><i class="fas fa-image"></i></button>
-        <button class="cxch-bell" id="cxch-bell" title="让他来查岗"><i class="fas fa-bell"></i></button>
         <input id="cxch-input" type="text" autocomplete="off" placeholder="回复传讯师…">
         <button class="cxch-send" id="cxch-send"><i class="fas fa-paper-plane"></i></button>
       </footer>
-
-      <div class="cxch-report" id="cxch-report">
-        <div class="cxch-report-card">
-          <div class="cxch-report-av"><i class="fas fa-user"></i></div>
-          <div class="cxch-report-from">来自 传讯 · <b id="cxch-report-name">梦角</b></div>
-          <div class="cxch-report-title">查岗</div>
-          <button class="cxch-report-btn" id="cxch-report-text">文字报备</button>
-          <button class="cxch-report-btn" id="cxch-report-photo">拍照报备</button>
-          <button class="cxch-report-btn red" id="cxch-report-no">拒绝报备</button>
-        </div>
-      </div>
 
       <div class="cxch-layer cx-off" id="cxch-arc-layer">
         <div class="cxch-sheet">
@@ -370,7 +256,7 @@
             <strong>接口设置</strong>
             <button class="cxch-btn" id="cxch-cfg-close"><i class="fas fa-times"></i></button>
           </div>
-          <p class="cxch-tip">地址已经填好 DeepSeek 官方接口，只要把你的 API Key 贴进来就能用（官方接口允许浏览器直连）。想换成自己的代理也行，改地址即可，代理可以不带 Key。没填 Key 也能用，只是感应由本地规则生成。要让聊天能看图，模型填 deepseek-flash（传图时会自动用它）。</p>
+          <p class="cxch-tip">地址已经填好 DeepSeek 官方接口，只要把你的 API Key 贴进来就能用（官方接口允许浏览器直连）。想换成自己的代理也行，改地址即可，代理可以不带 Key。没填 Key 也能用，只是感应由本地规则生成。</p>
           <div class="cxch-field"><span>服务地址</span><input id="cxch-cfg-url" type="text" placeholder="https://api.deepseek.com/chat/completions"></div>
           <div class="cxch-field"><span>API Key</span><input id="cxch-cfg-key" type="password" placeholder="sk-…"></div>
           <div class="cxch-field"><span>模型</span><input id="cxch-cfg-model" type="text" placeholder="deepseek-chat"></div>
@@ -382,102 +268,12 @@
 
     scrollEl = document.getElementById('cxch-scroll');
 
-    const imgFile = document.createElement('input');
-    imgFile.type = 'file';
-    imgFile.accept = 'image/*';
-    imgFile.style.display = 'none';
-    root.appendChild(imgFile);
-    imgFile.addEventListener('change', function () {
-      const f = imgFile.files && imgFile.files[0];
-      if (!f) return;
-      compressImg(f, 1280).then(function (b64) {
-        pendingImgs = [b64];
-        renderPreview();
-        if (reportPending) {
-          reportPending = false;
-          const inp = document.getElementById('cxch-input');
-          if (inp && !inp.value.trim()) inp.value = '报备';
-          send();
-        }
-      }).catch(function () {
-        reportPending = false;
-        toast('这张图读不出来，换一张');
-      });
-    });
-
-    scrollEl.addEventListener('click', function (e) {
-      if (mode !== 'chat') return;
-      const mini = e.target.closest ? e.target.closest('.cxch-steal-mini') : null;
-      if (mini) {
-        if (mini.classList.contains('done')) return;
-        const mi = parseInt(mini.getAttribute('data-steal'), 10);
-        const mm = session.messages[mi];
-        const mtext = mm ? String(mm.text || '').trim() : '';
-        if (mtext) doSteal(mtext, mini);
-        return;
-      }
-      if (e.target.closest && e.target.closest('.cxch-steal')) return;
-      const bubble = e.target.closest ? e.target.closest('.cxch-bubble') : null;
-      if (!bubble) return;
-      const wrap = bubble.closest('.cxch-msg');
-      if (!wrap || !wrap.classList.contains('me')) return;
-      toggleSteal(wrap);
-    });
-
     document.getElementById('cxch-close').addEventListener('click', close);
     document.getElementById('cxch-send').addEventListener('click', send);
 
     document.getElementById('cxch-input').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
 
-    document.getElementById('cxch-mode').addEventListener('click', switchMode);
-
-    document.getElementById('cxch-bell').addEventListener('click', function () {
-      if (mode !== 'chat') { toast('查岗在聊天里用'); return; }
-      if (busy) { toast('等他说完这句'); return; }
-      showReport();
-    });
-
-    document.getElementById('cxch-report-text').addEventListener('click', function () {
-      reportAsked();
-      const inp = document.getElementById('cxch-input');
-      if (inp) { inp.placeholder = '报备一下…'; inp.focus(); }
-    });
-
-    document.getElementById('cxch-report-photo').addEventListener('click', function () {
-      reportAsked();
-      reportPending = true;
-      imgFile.value = '';
-      imgFile.click();
-    });
-
-    document.getElementById('cxch-report-no').addEventListener('click', function () {
-      reportAsked();
-      const inp = document.getElementById('cxch-input');
-      if (inp) { inp.value = '不想报备'; send(); }
-    });
-
-    document.getElementById('cxch-img').addEventListener('click', () => {
-      if (mode !== 'chat') { toast('发图要在聊天模式里用'); return; }
-      imgFile.value = '';
-      imgFile.click();
-    });
-
-    document.getElementById('cxch-preview').addEventListener('click', (e) => {
-      const btn = e.target.closest ? e.target.closest('[data-pv-del]') : null;
-      if (!btn) return;
-      pendingImgs.splice(parseInt(btn.getAttribute('data-pv-del'), 10), 1);
-      renderPreview();
-    });
-
     document.getElementById('cxch-end').addEventListener('click', () => {
-      if (mode === 'chat') {
-        if (!confirm('开一段新的对话？这一段就不留了。')) return;
-        newChat();
-        paint();
-        setStep();
-        toast('换了一段新的');
-        return;
-      }
       if (!confirm('结束这一场传讯，收进档案？下一场会重新连接。')) return;
       archiveSession();
       newSession();
@@ -534,22 +330,10 @@
 
   function paint() {
     scrollEl.innerHTML = '';
-    session.messages.forEach((m, idx) => {
+    session.messages.forEach(m => {
       const wrap = document.createElement('div');
       wrap.className = 'cxch-msg ' + (m.who === 'me' ? 'me' : 'you');
-      wrap.dataset.idx = String(idx);
-      const pics = (m.imgs && m.imgs.length)
-        ? '<div class="cxch-pics">' + m.imgs.map(function (src) {
-            return '<img class="cxch-pic" src="' + src + '" alt="">';
-          }).join('') + '</div>'
-        : '';
-      const body = (mode === 'chuan')
-        ? decorate(m.text || '')
-        : (m.tag === 'report' ? '🔔 ' + escText(m.text || '') : escText(m.text || ''));
-      const stealBtn = (mode === 'chat' && m.who === 'me' && String(m.text || '').trim())
-        ? '<button class="cxch-steal-mini" data-steal="' + idx + '">✂ 偷走这句</button>'
-        : '';
-      wrap.innerHTML = (body ? '<div class="cxch-bubble">' + body + '</div>' : '') + pics + stealBtn +
+      wrap.innerHTML = '<div class="cxch-bubble">' + decorate(m.text) + '</div>' +
         '<div class="cxch-time">' + fmtTime(m.ts) + '</div>';
       scrollEl.appendChild(wrap);
     });
@@ -558,9 +342,7 @@
 
   function setStep() {
     const el = document.getElementById('cxch-step');
-    if (!el) return;
-    if (mode === 'chat') { el.textContent = '随便聊 · 可以发图'; return; }
-    el.textContent = STEP_LABEL[session.step] || '传讯中';
+    if (el) el.textContent = STEP_LABEL[session.step] || '传讯中';
   }
 
   function typing() {
@@ -576,328 +358,6 @@
     if (t) t.remove();
   }
 
-  function escText(t) {
-    return String(t == null ? '' : t)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
-  }
-
-  /* ── 偷走这句话，收进字卡 ── */
-
-  let stealHintShown = false;
-  try { stealHintShown = localStorage.getItem('cx_steal_hint') === '1'; } catch (e) {}
-
-  let chatHintShown = false;
-  try { chatHintShown = localStorage.getItem('cx_chat_hint') === '1'; } catch (e) {}
-  function chatHintOnce() {
-    if (chatHintShown) return;
-    chatHintShown = true;
-    try { localStorage.setItem('cx_chat_hint', '1'); } catch (e) {}
-    setTimeout(function () {
-      toast('左边那个铃铛是他来查岗；点自己发的那句下面的「✂ 偷走这句」能收进字卡');
-    }, 500);
-  }
-
-  function stealStoreKey() {
-    const pre = window.APP_PREFIX || 'CHAT_APP_V3_';
-    let sid = '';
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.indexOf(pre) === 0) {
-          const rest = k.slice(pre.length);
-          const cut = rest.indexOf('_');
-          if (cut > 0) { sid = rest.slice(0, cut); break; }
-        }
-      }
-    } catch (e) {}
-    return { pre: pre, sid: sid };
-  }
-
-  async function doSteal(text, chip) {
-    let arr = window._customReplies;
-    if (!Array.isArray(arr)) { arr = []; window._customReplies = arr; }
-    if (arr.some(function (x) { return String(x == null ? '' : x).trim() === text; })) {
-      if (chip.classList.contains('cxch-steal-mini')) {
-        chip.classList.add('done');
-        chip.textContent = '已在字卡里';
-        return;
-      }
-      chip.className = 'cxch-steal done';
-      chip.textContent = '这句已经在字卡里了';
-      setTimeout(function () { if (chip.parentNode) chip.remove(); }, 2200);
-      return;
-    }
-    arr.push(text);
-
-    // 存进原站的 customReplies（localforage，键名跟站内一致）
-    try {
-      const st = stealStoreKey();
-      let sid = st.sid;
-      if (!sid && window.localforage) {
-        try { sid = await localforage.getItem(st.pre + 'lastSessionId'); } catch (e) {}
-      }
-      if (sid && window.localforage) {
-        await localforage.setItem(st.pre + sid + '_customReplies', arr);
-      }
-    } catch (e) {}
-
-    toast('偷走了你的「' + (text.length > 12 ? text.slice(0, 12) + '…' : text) + '」');
-    if (chip.classList.contains('cxch-steal-mini')) {
-      chip.classList.add('done');
-      chip.textContent = '已偷走 · 在字卡里';
-      return;
-    }
-    chip.className = 'cxch-steal done';
-    chip.textContent = '偷走了，进字卡了';
-    setTimeout(function () { if (chip.parentNode) chip.remove(); }, 2400);
-  }
-
-  function toggleSteal(wrap) {
-    const existing = wrap.querySelector('.cxch-steal');
-    if (existing) { existing.remove(); return; }
-    scrollEl.querySelectorAll('.cxch-steal').forEach(function (x) { x.remove(); });
-
-    const i = parseInt(wrap.dataset.idx, 10);
-    const m = session.messages[i];
-    if (!m) return;
-    const text = String(m.text || '').trim();
-    if (!text) return;
-
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'cxch-steal';
-    chip.innerHTML = '✂ 偷走这句<span>' + escText(text.length > 12 ? text.slice(0, 12) + '…' : text) + '</span>';
-    chip.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (chip.classList.contains('done')) return;
-      doSteal(text, chip);
-    });
-    const timeEl = wrap.querySelector('.cxch-time');
-    if (timeEl) wrap.insertBefore(chip, timeEl); else wrap.appendChild(chip);
-  }
-
-  /* ── 查岗 ── */
-
-  const REPORT_KEY = 'cx_report_last';
-  let lastActive = Date.now();
-  let reportPending = false;
-
-  function mjAvatarSrc() {
-    try {
-      const img = document.querySelector('#partner-avatar img');
-      return img ? img.src : '';
-    } catch (e) { return ''; }
-  }
-
-  function showReport() {
-    if (!root) return;
-    const card = document.getElementById('cxch-report');
-    if (!card) return;
-    const av = card.querySelector('.cxch-report-av');
-    const src = mjAvatarSrc();
-    if (av) av.innerHTML = src ? '<img src="' + src + '" alt="">' : '<i class="fas fa-user"></i>';
-    const nameEl = document.getElementById('cxch-report-name');
-    if (nameEl) nameEl.textContent = mjName();
-    card.classList.add('on');
-    try { localStorage.setItem(REPORT_KEY, String(Date.now())); } catch (e) {}
-  }
-
-  function hideReport() {
-    const card = document.getElementById('cxch-report');
-    if (card) card.classList.remove('on');
-  }
-
-  /* 他的话一律从字卡库随机抽，不用模型生成 */
-  function pickCard() {
-    try {
-      const arr = window._customReplies;
-      if (Array.isArray(arr)) {
-        const list = arr.map(function (x) { return String(x == null ? '' : x).trim(); })
-          .filter(function (x) { return x && x.indexOf('__TAROT__') !== 0; });
-        if (list.length) return list[Math.floor(Math.random() * list.length)];
-      }
-    } catch (e) {}
-    return '';
-  }
-
-  async function cardReplyOne() {
-    const t = pickCard();
-    await new Promise(function (r) { setTimeout(r, 600 + Math.random() * 900); });
-    if (!t) {
-      push({ text: '（字卡库还空着，去「字卡回复」里加几句吧）' });
-      return;
-    }
-    push({ text: t });
-  }
-
-  /* 他发来一条「查岗」，之后她的这句话用字卡回应 */
-  let reportFlow = false;
-  let reportFlowTimer = null;
-  function armReportFlow() {
-    reportFlow = true;
-    if (reportFlowTimer) clearTimeout(reportFlowTimer);
-    reportFlowTimer = setTimeout(function () { reportFlow = false; }, 5 * 60 * 1000);
-  }
-
-  function reportAsked() {
-    hideReport();
-    armReportFlow();
-    push({ text: '查岗', tag: 'report' });
-  }
-
-  /* 概率向「打视频电话」看齐，压得很低：每回完一轮 3%，且一小时内只会有一次 */
-  const REPORT_CHANCE = 0.03;
-  const REPORT_COOLDOWN = 60 * 60 * 1000;
-
-  function maybeReport() {
-    if (mode !== 'chat' || busy) return;
-    const card = document.getElementById('cxch-report');
-    if (card && card.classList.contains('on')) return;
-    if (reportFlow) return;
-    if ((session.messages || []).length < 6) return;
-    let last = 0;
-    try { last = parseInt(localStorage.getItem(REPORT_KEY) || '0', 10) || 0; } catch (e) {}
-    if (Date.now() - last < REPORT_COOLDOWN) return;
-    if (Math.random() >= REPORT_CHANCE) return;
-    showReport();
-  }
-
-  /* ── 聊天模式的图片 ── */
-
-  function compressImg(file, maxW) {
-    return new Promise(function (resolve, reject) {
-      const fr = new FileReader();
-      fr.onload = function () {
-        const img = new Image();
-        img.onload = function () {
-          let w = img.width || 1, h = img.height || 1;
-          const max = Math.max(w, h);
-          if (max > maxW) { const r = maxW / max; w = Math.round(w * r); h = Math.round(h * r); }
-          const c = document.createElement('canvas');
-          c.width = w; c.height = h;
-          c.getContext('2d').drawImage(img, 0, 0, w, h);
-          try { resolve(c.toDataURL('image/jpeg', 0.8)); } catch (e) { reject(e); }
-        };
-        img.onerror = reject;
-        img.src = fr.result;
-      };
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    });
-  }
-
-  function renderPreview() {
-    const box = document.getElementById('cxch-preview');
-    if (!box) return;
-    box.innerHTML = pendingImgs.map(function (src, i) {
-      return '<div class="cxch-pv"><img src="' + src + '" alt=""><button data-pv-del="' + i + '"><i class="fas fa-times"></i></button></div>';
-    }).join('');
-    box.classList.toggle('on', pendingImgs.length > 0);
-  }
-
-  /* 模式：传讯 ⇄ 聊天 */
-  function applyMode() {
-    if (!root) return;
-    root.dataset.mode = mode;
-    const nameEl = document.getElementById('cxch-tname');
-    if (nameEl) nameEl.textContent = (mode === 'chat') ? '聊天' : '传讯室';
-    const inputEl = document.getElementById('cxch-input');
-    if (inputEl) inputEl.placeholder = (mode === 'chat') ? '说点什么…' : '回复传讯师…';
-    const endBtn = document.getElementById('cxch-end');
-    if (endBtn) endBtn.title = (mode === 'chat') ? '新开一段对话' : '结束并归档';
-    renderPreview();
-  }
-
-  function switchMode() {
-    saveSession();
-    mode = (mode === 'chat') ? 'chuan' : 'chat';
-    try { localStorage.setItem(MODE_KEY, mode); } catch (e) {}
-    pendingImgs = [];
-    hideReport();
-    session = loadSession();
-    if (!session || !session.messages.length) {
-      if (mode === 'chat') newChat(); else newSession();
-    }
-    applyMode();
-    paint();
-    setStep();
-    if (mode === 'chat') chatHintOnce();
-    toast(mode === 'chat' ? '换成聊天了，直接跟它说就行' : '回到传讯');
-  }
-
-  /* 聊天模式的回复（可带图，走 DeepSeek 的 vision 模型） */
-  async function chatReply(text, imgs) {
-    if (!hasModel()) {
-      push({ text: '（还没填 Key。点右上角那个滑杆，把 DeepSeek 的 API Key 贴进去就能聊了。）' });
-      return;
-    }
-    const cfg = getCfg();
-
-    const allowVision = !!(imgs && imgs.length);
-    const histAll = session.messages.slice(-16, -1);
-
-    // 历史里还在带图的，只留最近两张，其余只发文字（省 token，也免得报错）
-    const imgIdx = [];
-    histAll.forEach(function (m, i) { if (m.imgs && m.imgs.length) imgIdx.push(i); });
-    const keepImg = imgIdx.slice(-2);
-
-    const model = (allowVision || imgIdx.length) ? 'deepseek-flash' : (cfg.model || 'deepseek-chat');
-
-    const messages = [{ role: 'system', content: CHAT_SYS }].concat(histAll.map(function (m, i) {
-      if (m.who === 'me') {
-        if (m.imgs && m.imgs.length && keepImg.indexOf(i) >= 0) {
-          return {
-            role: 'user',
-            content: [{ type: 'text', text: m.text || '（发了一张图）' }].concat(
-              m.imgs.map(function (src) { return { type: 'image_url', image_url: { url: src } }; })
-            )
-          };
-        }
-        return { role: 'user', content: (m.text || '') + ((m.imgs && m.imgs.length) ? '（图见上一条）' : '') };
-      }
-      return { role: 'assistant', content: m.text || '' };
-    }));
-
-    if (allowVision) {
-      messages.push({
-        role: 'user',
-        content: [{ type: 'text', text: text || '看看这张图' }].concat(
-          imgs.map(function (src) { return { type: 'image_url', image_url: { url: src } }; })
-        )
-      });
-    } else {
-      messages.push({ role: 'user', content: text || '' });
-    }
-
-    const res = await fetch(cfg.url, {
-      method: 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' },
-        cfg.key ? { 'Authorization': 'Bearer ' + cfg.key } : {}),
-      body: JSON.stringify({
-        model: model, messages: messages, temperature: 0.9,
-        max_tokens: allowVision || imgIdx.length ? 1400 : 900
-      })
-    });
-
-    if (!res.ok) {
-      let detail = '';
-      try { const j = await res.json(); detail = (j.error && (j.error.message || j.error)) || ''; } catch (e) {}
-      throw new Error(errText(res.status, detail));
-    }
-    const j = await res.json();
-    const msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
-    let out = msg.content || j.text || '';
-    // flash 这类会先写思考过程：正文为空时就拿思考的最后一段顶上
-    if (!String(out).trim() && msg.reasoning_content) {
-      out = String(msg.reasoning_content).trim().split(/\n\s*\n/).filter(function (x) {
-        return x.trim() && !/^\d+\.\s*\*\*/.test(x.trim());
-      }).pop() || String(msg.reasoning_content).trim().slice(-600);
-    }
-    if (!String(out).trim()) throw new Error('这次它没说出话来，再说一句试试');
-    push({ text: String(out).trim() });
-  }
-
   function toast(msg) {
     const t = document.createElement('div');
     t.textContent = msg;
@@ -908,15 +368,6 @@
   }
 
   /* ── 模型 ── */
-
-  function errText(status, detail) {
-    const tail = detail ? '：' + String(detail).slice(0, 80) : '';
-    if (status === 401) return 'Key 不对，去设置里换一把';
-    if (status === 402) return '这个账号的余额用完了，要充一点才行';
-    if (status === 429) return '问得太急，歇几秒再说';
-    if (status >= 500) return '官方那头出错（' + status + '）';
-    return '接口 ' + status + tail;
-  }
 
   function hasModel() {
     const c = getCfg();
@@ -954,11 +405,7 @@
       })
     });
 
-    if (!res.ok) {
-      let detail = '';
-      try { const b = await res.json(); detail = (b.error && (b.error.message || b.error)) || ''; } catch (e) {}
-      throw new Error(errText(res.status, detail));
-    }
+    if (!res.ok) throw new Error('接口 ' + res.status);
     const j = await res.json();
 
     // 兼容两种返回：OpenAI 格式 / 自定义 {ok, text}
@@ -1134,55 +581,25 @@
     if (busy) return;
     const input = document.getElementById('cxch-input');
     const text = input.value.trim();
-    const hasPic = (mode === 'chat' && pendingImgs.length > 0);
-    if (!text && !hasPic) return;
+    if (!text) return;
 
-    lastActive = Date.now();
     busy = true;
     document.getElementById('cxch-send').disabled = true;
     input.value = '';
 
-    const useCard = (mode === 'chat' && reportFlow);
-    if (useCard) {
-      reportFlow = false;
-      if (reportFlowTimer) { clearTimeout(reportFlowTimer); reportFlowTimer = null; }
-    }
-    const imgs = (mode === 'chat') ? pendingImgs.slice() : [];
-    session.messages.push({ ts: Date.now(), who: 'me', text: text, imgs: imgs });
+    session.messages.push({ ts: Date.now(), who: 'me', text: text });
     saveSession();
-    pendingImgs = [];
-    renderPreview();
     paint();
     typing();
-    if (hasPic) {
-      const st = document.getElementById('cxch-step');
-      if (st) st.textContent = '正在看图，稍等一下…';
-    }
 
     try {
-      if (useCard) await cardReplyOne();
-      else if (mode === 'chat') await chatReply(text, imgs);
-      else await reply(text);
+      await reply(text);
     } catch (e) {
       push({ text: '（这边卡了一下：' + String(e.message || e) + '。你再说一句，我接着。）' });
     } finally {
       untyping();
-      setStep();
-      if (!stealHintShown && session.messages.length > 2) {
-        stealHintShown = true;
-        try { localStorage.setItem('cx_steal_hint', '1'); } catch (e) {}
-        setTimeout(function () { toast('点一下自己发的话，可以把那句收进字卡'); }, 900);
-      }
       busy = false;
       document.getElementById('cxch-send').disabled = false;
-      const ph = document.getElementById('cxch-input');
-      if (ph) ph.placeholder = (mode === 'chat') ? '说点什么…' : '回复传讯师…';
-      if (mode === 'chat' && !useCard) {
-        setTimeout(maybeReport, 2500);
-        setTimeout(function () {
-          try { if (window.MoneyBox && window.MoneyBox.chance) window.MoneyBox.chance(); } catch (e) {}
-        }, 4000);
-      }
       requestAnimationFrame(() => { scrollEl.scrollTop = scrollEl.scrollHeight; });
       input.focus();
     }
@@ -1274,21 +691,16 @@
     if (!root) build();
     root.classList.remove('cx-off');
 
-    try { mode = (localStorage.getItem(MODE_KEY) === 'chat') ? 'chat' : 'chuan'; } catch (e) { mode = 'chuan'; }
     session = loadSession();
-    if (!session || !session.messages.length) {
-      if (mode === 'chat') newChat(); else newSession();
+    if (!session || !session.messages.length || session.step === 0) {
+      newSession();
     }
-    applyMode();
     paint();
     setStep();
-    if (mode === 'chat') chatHintOnce();
-    lastActive = Date.now();
     setTimeout(() => { const i = document.getElementById('cxch-input'); if (i) i.focus(); }, 200);
   }
 
   function close() {
-    hideReport();
     if (root) root.classList.add('cx-off');
     if (window.CxLauncher) window.CxLauncher.showHome();
   }
