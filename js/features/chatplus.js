@@ -2,7 +2,7 @@
  * chatplus.js — 主聊天上的两个小功能（不动 core.js）
  * ------------------------------------------------------------
  * 1) 偷走这句：点自己发的消息，旁边冒出「✂ 偷走这句」，点了就进字卡库（customReplies）
- * 2) 查岗：输入区加一个铃铛，点了他就发一条「查岗」，你选文字报备 / 拍照报备 / 拒绝报备
+ * 2) 查岗：入口在「高级功能」面板里的「查岗」，点了弹白卡，你选文字报备 / 拍照报备 / 拒绝报备
  *    他的话仍然是站里原来的字卡回复，这里不生成任何台词
  * 3) 自动查岗：你每发一条消息，25 秒后掷一次 3%，一小时内最多一次
  */
@@ -246,22 +246,43 @@
         openReport();
     }
 
-    function addBell() {
-        if (document.getElementById('cx-bell-btn')) return true;
-        var anchor = document.getElementById('attachment-btn');
-        if (!anchor || !anchor.parentNode) return false;
-        var b = document.createElement('button');
-        b.id = 'cx-bell-btn';
-        b.className = 'input-btn';
-        b.title = '让他来查岗';
-        b.type = 'button';
-        b.innerHTML = '<i class="fas fa-bell"></i>';
-        b.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            openReport();
-        });
-        anchor.parentNode.insertBefore(b, anchor);
+    function ensureEntry() {
+        var legacy = document.getElementById('cx-bell-btn');
+        if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+
+        var box = document.getElementById('advanced-modal');
+        var list = box ? box.querySelector('.settings-item-list') : null;
+        if (list) {
+            if (!document.getElementById('cx-report-entry')) {
+                var item = document.createElement('div');
+                item.className = 'settings-item';
+                item.id = 'cx-report-entry';
+                item.innerHTML = '<i class="fas fa-bell"></i><span>查岗</span>';
+                item.addEventListener('click', function () {
+                    if (typeof window.hideModal === 'function') window.hideModal(box);
+                    setTimeout(openReport, 200);
+                });
+                list.appendChild(item);
+            }
+            return true;
+        }
+
+        if (!document.getElementById('cx-bell-btn')) {
+            var anchor = document.getElementById('attachment-btn');
+            if (!anchor || !anchor.parentNode) return false;
+            var b = document.createElement('button');
+            b.id = 'cx-bell-btn';
+            b.className = 'input-btn';
+            b.title = '让他来查岗';
+            b.type = 'button';
+            b.innerHTML = '<i class="fas fa-bell"></i>';
+            b.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                openReport();
+            });
+            anchor.parentNode.insertBefore(b, anchor);
+        }
         return true;
     }
 
@@ -302,13 +323,13 @@
     function boot() {
         injectStyle();
         bind();
-        if (!addBell()) {
-            setTimeout(addBell, 1500);
-            setTimeout(addBell, 4000);
+        if (!ensureEntry()) {
+            setTimeout(ensureEntry, 1500);
+            setTimeout(ensureEntry, 4000);
         }
         try {
             var mo = new MutationObserver(function () {
-                if (!document.getElementById('cx-bell-btn')) addBell();
+                if (!document.getElementById('cx-report-entry') && !document.getElementById('cx-bell-btn')) ensureEntry();
             });
             mo.observe(document.body, { childList: true, subtree: true });
         } catch (e) {}
