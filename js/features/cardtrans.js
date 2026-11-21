@@ -6,11 +6,16 @@
  *   - 偶尔输入日语 → 前面补中文，变成「中文（日语原文）」
  * 已有的字卡：启动后自动扫一遍补齐；之后每 45 秒检查一次，
  * 任何入口新加的字卡（含被偷走的那句）都会在几秒内补上。
+ * 只改文字本身：不删、不挪、不重排，字卡所属的分组也原样保留
+ * （分组里存的那份文本会同步改掉，免得字卡掉出分组）。
  * 不动原站逻辑，只改字卡数组里的文本。
  */
 (function () {
     'use strict';
 
+    /* 有道（youdao demo 接口）：无需 key，允许跨域，逐条翻 */
+    var YOUDAO = 'https://aidemo.youdao.com/trans';
+    /* 有道挂了再退回 DeepSeek 批量 */
     var API = 'https://api.deepseek.com/chat/completions';
     var MODEL = 'deepseek-chat';
     var FALLBACK_KEY = 'sk-d2844d399fb54e539f8d14527ab4ba58';
@@ -49,11 +54,49 @@
         orig = String(orig == null ? '' : orig).trim();
         tr = String(tr == null ? '' : tr).trim();
         if (!tr) return orig;
+        /* 原句没有句末标点，就别让译文硬加一个句号 */
+        if (!/[。！？!?…]$/.test(orig)) tr = tr.replace(/[。.]$/, '');
         if (isJP(orig)) return tr + '（' + orig + '）';
         return orig + '（' + tr + '）';
     }
 
-    function translate(texts) {
+    /* ── 有道：一条一句，串行 ── */
+    function youdaoOne(t) {
+        var jp = isJP(t);
+        var u = YOUDAO
+            + '?q=' + encodeURIComponent(t)
+            + '&from=' + (jp ? 'ja' : 'zh-CHS')
+            + '&to=' + (jp ? 'zh-CHS' : 'ja');
+        return fetch(u).then(function (r) { return r.json(); }).then(function (j) {
+            if (!j || (j.errorCode != null && String(j.errorCode) !== '0')) {
+                throw new Error('youdao:' + (j && j.errorCode));
+            }
+            var v = Array.isArray(j.translation) ? j.translation.join('') : String(j.translation || '');
+            v = String(v).replace(/\s+/g, ' ').trim();
+            if (!v) throw new Error('empty');
+            return v;
+        });
+    }
+
+    function translateYoudao(texts) {
+        return new Promise(function (resolve, reject) {
+            var out = new Array(texts.length);
+            var i = 0;
+            function next() {
+                if (i >= texts.length) { resolve(out); return; }
+                var k = i;
+                youdaoOne(texts[k]).then(function (v) {
+                    out[k] = v;
+                    i++;
+                    setTimeout(next, 240);
+                }).catch(reject);
+            }
+            next();
+        });
+    }
+
+    /* ── DeepSeek：批量兜底 ── */
+    function translateAI(texts) {
         var k = getKey();
         if (!k) return Promise.reject(new Error('no key'));
         var sys = '你是翻译引擎。把用户给出的每条句子翻译成日语；如果某条本身已经是日语，就翻译成简体中文。'
@@ -79,6 +122,10 @@
             if (!Array.isArray(a)) throw new Error('bad');
             return a.map(function (x) { return String(x == null ? '' : x).trim(); });
         });
+    }
+
+    function translate(texts) {
+        return translateYoudao(texts).catch(function () { return translateAI(texts); });
     }
 
     function persist(list) {
@@ -110,6 +157,28 @@
             n++;
         }
         return n;
+    }
+
+    function groupsPool() {
+        try {
+            if (typeof customReplyGroups !== 'undefined' && Array.isArray(customReplyGroups)) return customReplyGroups;
+        } catch (e) {}
+        try {
+            if (Array.isArray(window.customReplyGroups)) return window.customReplyGroups;
+        } catch (e) {}
+        return null;
+    }
+
+    /* 改文本时，分组里存的那份也一起换掉，别让字卡掉出原来的分组 */
+    function syncGroups(oldT, newT) {
+        var gs = groupsPool();
+        if (!gs) return;
+        gs.forEach(function (g) {
+            if (!g || !Array.isArray(g.items)) return;
+            for (var i = 0; i < g.items.length; i++) {
+                if (String(g.items[i] == null ? '' : g.items[i]).trim() === oldT) g.items[i] = newT;
+            }
+        });
     }
 
     /* 批量补齐 */
@@ -146,7 +215,11 @@
                     var tr = String(trs[k] == null ? '' : trs[k]).trim();
                     if (!tr || hasPair(now)) return;
                     var f = compose(now, tr);
-                    if (f && f !== cur[i]) { cur[i] = f; changed = true; fixed++; }
+                    if (f && f !== cur[i]) {
+                        cur[i] = f;            // 原地替换，不删不挪，顺序不变
+                        syncGroups(now, f);
+                        changed = true; fixed++;
+                    }
                 });
                 if (changed) { persist(cur); refreshList(); }
                 setTimeout(loop, 700);
@@ -158,7 +231,8 @@
 
         function finish() {
             running = false;
-            persist(pool() || []);
+            var p = pool();
+            if (p) persist(p);
             if (fixed) {
                 try {
                     if (typeof showNotification === 'function') showNotification('✓ 已给 ' + fixed + ' 条字卡补上日语翻译', 'success', 3000);
