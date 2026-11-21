@@ -141,10 +141,23 @@
         if (!Array.isArray(arr)) { arr = []; window._customReplies = arr; }
         if (arr.some(function (x) { return String(x == null ? '' : x).trim() === t; })) return;
         if (Math.random() >= STEAL_CHANCE) return;
-        arr.push(t);
-        saveCards();
-        stampSteal();
-        note(partnerName() + ' 偷走了你的「' + (t.length > 14 ? t.slice(0, 14) + '…' : t) + '」');
+
+        function finish(val) {
+            var list = window._customReplies;
+            if (!Array.isArray(list)) { list = []; window._customReplies = list; }
+            if (list.some(function (x) { return String(x == null ? '' : x).trim() === val; })) return;
+            list.push(val);
+            saveCards();
+            stampSteal();
+            note(partnerName() + ' 偷走了你的「' + (val.length > 14 ? val.slice(0, 14) + '…' : val) + '」');
+        }
+
+        /* 入库前补成「中文（日语）」，跟字卡库的格式保持一致 */
+        if (window.CardTrans && window.CardTrans.fill) {
+            window.CardTrans.fill(t).then(function (v) { finish(v || t); }).catch(function () { finish(t); });
+        } else {
+            finish(t);
+        }
     }
 
     /* ═══════════════ 三、查岗 ═══════════════ */
