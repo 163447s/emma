@@ -2,7 +2,7 @@
    朋友圈（Moments）· 微信朋友圈样式
    - 顶部封面：跟聊天页背景是同一份（改这边聊天页也变，反之亦然）
    - 头像 / 名字：直接用聊天页那一份，点一下就能改
-   - 你：文字 + 最多 3 张图；梦角：字卡为主，偶尔 AI 现写一句
+   - 你：文字 + 最多 3 张图；梦角：只用你的字卡库随机（评论回复也不走 AI）
    - 纯前端扩展，不动原站任何逻辑
    ════════════════════════════════════════════════ */
 (function () {
@@ -410,9 +410,9 @@
       var wrap2 = art2.querySelector('.cxm-cwrap');
       if (wrap2) wrap2.classList.remove('on');
       addComment(idc, 'me', txt);
-      // 如果评的是梦角的动态，TA 有一半几率回一句
+      // 如果评的是梦角的动态，TA 有 15% 几率回一句
       var tgt = load().filter(function (x) { return x.id === idc; })[0];
-      if (tgt && tgt.who === 'mj' && Math.random() < 0.5) {
+      if (tgt && tgt.who === 'mj' && Math.random() < 0.15) {
         setTimeout(function () { mjComment(idc); }, 1600 + Math.random() * 2200);
       }
       return;
@@ -450,15 +450,11 @@
     render();
   }
 
-  var MJ_REPLY = [
-    '嗯。', '看到了。', '在。', '挺好的。', '别忘了吃饭。',
-    '我记住了。', '下次一起。', '别熬夜。', '这个时候还醒着？',
-    '谢谢你。', '我一直都在。'
-  ];
-
-  /* 梦角在动态下面回一句 */
+  /* 梦角在动态下面回一句：只从字卡库里抽（不走 AI） */
   function mjComment(postId) {
-    var pick = MJ_REPLY[Math.floor(Math.random() * MJ_REPLY.length)];
+    var pool = cardsPool();
+    var pick = String(pool[Math.floor(Math.random() * pool.length)] || '').replace(/\s+/g, ' ').slice(0, 60);
+    if (!pick) return;
     addComment(postId, 'mj', pick);
   }
 
@@ -489,18 +485,18 @@
 
   function reactAfterPublish() {
     setTimeout(function () {
-      if (Math.random() < 0.5) mjLikeMine();
+      if (Math.random() < 0.15) mjLikeMine();
     }, 2000 + Math.random() * 2000);
 
     setTimeout(function () {
-      if (Math.random() < 0.38) mjPost();
+      if (Math.random() < 0.15) mjPost();
     }, 4200 + Math.random() * 4000);
 
-    // 梦角偶尔来评论一句
+    // 梦角偶尔来评论一句（15%）
     setTimeout(function () {
       var list = load();
       var mine = list.filter(function (x) { return x.who === 'me'; })[0];
-      if (mine && Math.random() < 0.55) mjComment(mine.id);
+      if (mine && Math.random() < 0.15) mjComment(mine.id);
     }, 6000 + Math.random() * 5000);
   }
 
@@ -541,57 +537,6 @@
     pushMJ(cardPost());
   }
 
-  /* ── AI ── */
-  function aiCfg() {
-    try {
-      var c = JSON.parse(localStorage.getItem('cx_chuan_cfg') || '{}') || {};
-      if (!c || !c.key) return null;
-      return {
-        url: c.url || 'https://api.deepseek.com/chat/completions',
-        key: c.key,
-        model: c.model || 'deepseek-chat'
-      };
-    } catch (e) { return null; }
-  }
-
-  function recentLines(n) {
-    var list = load().slice(0, n);
-    var nm = names();
-    return list.map(function (p) {
-      var t = String(p.text || '').replace(/\n/g, ' ').slice(0, 60);
-      return (p.who === 'mj' ? nm.mj : nm.me) + '：' + t;
-    }).join('\n');
-  }
-
-  function aiMoment() {
-    var cfg = aiCfg();
-    if (!cfg) return Promise.resolve(null);
-
-    var nm = names();
-    var sys = '你在替一个人写他自己朋友圈里的动态。用第一人称，写他自己这一天的某个具体细节。'
-            + '要求：中文；一句话；25 字以内；口吻安静、克制、话少；不用感叹号，不用表情符号，不加引号；'
-            + '不要称呼任何人，不要出现别人的名字，不要对着谁说话；不要腻，不要空泛抒情；只输出这句话本身。';
-    var user = '这个人叫：' + nm.mj +
-               '\n最近发生的事（可以参考，也可以写别的）：\n' + (recentLines(5) || '（还没有）') +
-               '\n\n写一条新的。';
-
-    return fetch(cfg.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
-      body: JSON.stringify({
-        model: cfg.model,
-        messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
-        temperature: 1.0,
-        max_tokens: 90
-      })
-    }).then(function (r) { return r.json(); }).then(function (j) {
-      var t = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-      if (!t) return null;
-      t = String(t).replace(/^[\s"'“”「」]+|[\s"'“”「」]+$/g, '').split('\n')[0].trim();
-      return t ? t.slice(0, 44) : null;
-    }).catch(function () { return null; });
-  }
-
   function maybeOnOpen() {
     var list = load();
     var lastMJ = null;
@@ -599,7 +544,7 @@
       if (list[i].who === 'mj') { lastMJ = list[i]; break; }
     }
     if (lastMJ && Date.now() - lastMJ.ts < 90 * 60 * 1000) return;
-    if (Math.random() > 0.55) return;
+    if (Math.random() > 0.15) return;
     setTimeout(function () { mjPost(); }, 900 + Math.random() * 900);
   }
 
