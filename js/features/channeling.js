@@ -188,6 +188,12 @@
 }
 .cxch-steal span { color: #c25b3f; font-weight: 600; max-width: 118px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cxch-steal.done { color: #8a9b78; border-color: #d9e2cf; background: #f7faf3; cursor: default; }
+.cxch-steal-mini {
+  align-self: flex-end; margin-top: 1px; padding: 0 3px; border: none; background: none;
+  color: #b6a893; font-size: 10.5px; letter-spacing: .4px; cursor: pointer;
+}
+.cxch-steal-mini:hover { color: #c25b3f; }
+.cxch-steal-mini.done { color: #8a9b78; cursor: default; }
 
 /* 括号＝传讯师旁白 */
 .cxch-aside { color: #8b7f9a; font-size: 12.5px; }
@@ -401,6 +407,15 @@
 
     scrollEl.addEventListener('click', function (e) {
       if (mode !== 'chat') return;
+      const mini = e.target.closest ? e.target.closest('.cxch-steal-mini') : null;
+      if (mini) {
+        if (mini.classList.contains('done')) return;
+        const mi = parseInt(mini.getAttribute('data-steal'), 10);
+        const mm = session.messages[mi];
+        const mtext = mm ? String(mm.text || '').trim() : '';
+        if (mtext) doSteal(mtext, mini);
+        return;
+      }
       if (e.target.closest && e.target.closest('.cxch-steal')) return;
       const bubble = e.target.closest ? e.target.closest('.cxch-bubble') : null;
       if (!bubble) return;
@@ -531,7 +546,10 @@
       const body = (mode === 'chuan')
         ? decorate(m.text || '')
         : (m.tag === 'report' ? '🔔 ' + escText(m.text || '') : escText(m.text || ''));
-      wrap.innerHTML = (body ? '<div class="cxch-bubble">' + body + '</div>' : '') + pics +
+      const stealBtn = (mode === 'chat' && m.who === 'me' && String(m.text || '').trim())
+        ? '<button class="cxch-steal-mini" data-steal="' + idx + '">✂ 偷走这句</button>'
+        : '';
+      wrap.innerHTML = (body ? '<div class="cxch-bubble">' + body + '</div>' : '') + pics + stealBtn +
         '<div class="cxch-time">' + fmtTime(m.ts) + '</div>';
       scrollEl.appendChild(wrap);
     });
@@ -569,6 +587,17 @@
   let stealHintShown = false;
   try { stealHintShown = localStorage.getItem('cx_steal_hint') === '1'; } catch (e) {}
 
+  let chatHintShown = false;
+  try { chatHintShown = localStorage.getItem('cx_chat_hint') === '1'; } catch (e) {}
+  function chatHintOnce() {
+    if (chatHintShown) return;
+    chatHintShown = true;
+    try { localStorage.setItem('cx_chat_hint', '1'); } catch (e) {}
+    setTimeout(function () {
+      toast('左边那个铃铛是他来查岗；点自己发的那句下面的「✂ 偷走这句」能收进字卡');
+    }, 500);
+  }
+
   function stealStoreKey() {
     const pre = window.APP_PREFIX || 'CHAT_APP_V3_';
     let sid = '';
@@ -589,6 +618,11 @@
     let arr = window._customReplies;
     if (!Array.isArray(arr)) { arr = []; window._customReplies = arr; }
     if (arr.some(function (x) { return String(x == null ? '' : x).trim() === text; })) {
+      if (chip.classList.contains('cxch-steal-mini')) {
+        chip.classList.add('done');
+        chip.textContent = '已在字卡里';
+        return;
+      }
       chip.className = 'cxch-steal done';
       chip.textContent = '这句已经在字卡里了';
       setTimeout(function () { if (chip.parentNode) chip.remove(); }, 2200);
@@ -608,9 +642,14 @@
       }
     } catch (e) {}
 
+    toast('偷走了你的「' + (text.length > 12 ? text.slice(0, 12) + '…' : text) + '」');
+    if (chip.classList.contains('cxch-steal-mini')) {
+      chip.classList.add('done');
+      chip.textContent = '已偷走 · 在字卡里';
+      return;
+    }
     chip.className = 'cxch-steal done';
     chip.textContent = '偷走了，进字卡了';
-    toast('偷走了你的「' + (text.length > 12 ? text.slice(0, 12) + '…' : text) + '」');
     setTimeout(function () { if (chip.parentNode) chip.remove(); }, 2400);
   }
 
@@ -783,6 +822,7 @@
     applyMode();
     paint();
     setStep();
+    if (mode === 'chat') chatHintOnce();
     toast(mode === 'chat' ? '换成聊天了，直接跟它说就行' : '回到传讯');
   }
 
@@ -1242,6 +1282,7 @@
     applyMode();
     paint();
     setStep();
+    if (mode === 'chat') chatHintOnce();
     lastActive = Date.now();
     setTimeout(() => { const i = document.getElementById('cxch-input'); if (i) i.focus(); }, 200);
   }
