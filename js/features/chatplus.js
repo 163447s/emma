@@ -1,7 +1,8 @@
 /**
  * chatplus.js — 主聊天上的两个小功能（不动 core.js）
  * ------------------------------------------------------------
- * 1) 偷走这句：点自己发的消息，旁边冒出「✂ 偷走这句」，点了就进字卡库（customReplies）
+ * 1) 偷走这句：他那侧自动来偷 —— 你发完消息，他有 3% 几率把你刚说的那句收进字卡库，
+ *    聊天里只浮一行小字「梦角 偷走了你的「…」」。你这边没有任何按钮，不怕误触就入卡
  * 2) 查岗：入口在「高级功能」面板里的「查岗」，点了弹白卡，你选文字报备 / 拍照报备 / 拒绝报备
  *    他的话仍然是站里原来的字卡回复，这里不生成任何台词
  * 3) 自动查岗：你每发一条消息，25 秒后掷一次 3%，一小时内最多一次
@@ -48,10 +49,11 @@
         var st = document.createElement('style');
         st.id = 'cxplus-style';
         st.textContent = [
-            '.cx-steal-btn{position:fixed;z-index:10001;padding:5px 10px;border-radius:999px;border:1px solid #ecdcc8;',
-            'background:#fffdf9;color:#9a7a58;font-size:12px;line-height:1;cursor:pointer;',
-            'box-shadow:0 4px 14px rgba(120,90,60,.16);font-family:inherit;}',
-            '.cx-steal-btn:active{transform:scale(.97);}',
+            '.cx-steal-note{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:10002;',
+            'max-width:78vw;text-align:center;padding:7px 13px;border-radius:999px;',
+            'background:rgba(255,253,249,.96);border:1px solid #ecdcc8;color:#9a7a58;',
+            'font-size:12px;line-height:1.45;opacity:0;transition:opacity .45s;font-family:inherit;}',
+            '.cx-steal-note.on{opacity:1;}',
             '.cx-report-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;',
             'background:rgba(54,42,32,.34);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}',
             '.cx-report-card{width:min(84vw,330px);background:#fff;border-radius:20px;padding:24px 18px 18px;',
@@ -72,16 +74,35 @@
         document.head.appendChild(st);
     }
 
-    /* ═══════════════ 二、偷走这句 ═══════════════ */
+    /* ═══════════════ 二、偷走这句（他那侧自动来偷） ═══════════════ */
 
+    var STEAL_KEY = 'cx_steal_last';
+    var STEAL_CHANCE = 0.03;
+    var STEAL_COOLDOWN = 60 * 60 * 1000;
     var stealBtn = null;
-    var stealBar = null;
 
     function hideSteal() {
-        if (stealBar && stealBar.parentNode) stealBar.parentNode.removeChild(stealBar);
         if (stealBtn && stealBtn.parentNode) stealBtn.parentNode.removeChild(stealBtn);
-        stealBar = null;
         stealBtn = null;
+    }
+
+    function stealLastAt() {
+        try { return parseInt(localStorage.getItem(STEAL_KEY) || '0', 10) || 0; } catch (e) { return 0; }
+    }
+    function stampSteal() {
+        try { localStorage.setItem(STEAL_KEY, String(Date.now())); } catch (e) {}
+    }
+
+    function note(msg) {
+        try {
+            var n = document.createElement('div');
+            n.className = 'cx-steal-note';
+            n.textContent = msg;
+            document.body.appendChild(n);
+            setTimeout(function () { n.classList.add('on'); }, 60);
+            setTimeout(function () { n.classList.remove('on'); }, 5200);
+            setTimeout(function () { if (n.parentNode) n.parentNode.removeChild(n); }, 5900);
+        } catch (e) {}
     }
 
     function saveCards() {
@@ -99,68 +120,31 @@
         } catch (e) {}
     }
 
-    function doSteal(text, btn) {
+    function mineText() {
+        try {
+            var a = (typeof messages !== 'undefined' && messages) ? messages : [];
+            for (var i = a.length - 1; i >= 0; i--) {
+                if (a[i] && a[i].sender === 'user') {
+                    var t = String(a[i].text || '').replace(/\s+/g, ' ').trim();
+                    if (t && t.length <= 80) return t;
+                }
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    function autoSteal() {
+        if (Date.now() - stealLastAt() < STEAL_COOLDOWN) return;
+        var t = mineText();
+        if (!t) return;
         var arr = window._customReplies;
         if (!Array.isArray(arr)) { arr = []; window._customReplies = arr; }
-        if (arr.some(function (x) { return String(x == null ? '' : x).trim() === text; })) {
-            if (btn) btn.textContent = '已经在字卡里了';
-            setTimeout(hideSteal, 1300);
-            return;
-        }
-        arr.push(text);
+        if (arr.some(function (x) { return String(x == null ? '' : x).trim() === t; })) return;
+        if (Math.random() >= STEAL_CHANCE) return;
+        arr.push(t);
         saveCards();
-        if (btn) btn.textContent = '偷走了，进字卡了';
-        toast('偷走了你的「' + (text.length > 12 ? text.slice(0, 12) + '…' : text) + '」');
-        setTimeout(hideSteal, 1600);
-    }
-
-    function msgText(el) {
-        var out = '';
-        try {
-            var tx = el.querySelector('.msg-txt');
-            if (tx) out = tx.textContent || '';
-        } catch (e) {}
-        out = out.replace(/\s+/g, ' ').trim();
-        if (!out) {
-            try {
-                for (var i = 0; i < el.childNodes.length; i++) {
-                    var n = el.childNodes[i];
-                    if (n.nodeType === 3) out += n.nodeValue;
-                }
-            } catch (e) {}
-            out = out.replace(/\s+/g, ' ').trim();
-        }
-        if (!out) out = (el.innerText || '').replace(/\s+/g, ' ').trim();
-        return out;
-    }
-
-    function showSteal(el, text) {
-        hideSteal();
-        var t = el;
-        if (!t || !document.contains(t) || !t.getBoundingClientRect().width) {
-            var list = document.querySelectorAll('.message.message-sent');
-            for (var i = list.length - 1; i >= 0; i--) {
-                if (list[i].getBoundingClientRect().width) { t = list[i]; break; }
-            }
-        }
-        if (!t) return;
-        var r = t.getBoundingClientRect();
-        if (!r.width) return;
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'cx-steal-btn';
-        btn.textContent = '✂ 偷走这句';
-        var top = r.top - 34;
-        if (top < 8) top = r.bottom + 24;
-        btn.style.top = top + 'px';
-        btn.style.left = Math.max(6, Math.min(window.innerWidth - 110, r.right - 96)) + 'px';
-        document.body.appendChild(btn);
-        stealBtn = btn;
-        btn.addEventListener('click', function (ev) {
-            ev.stopPropagation();
-            doSteal(text, btn);
-        });
-        setTimeout(function () { if (stealBtn === btn) hideSteal(); }, 6500);
+        stampSteal();
+        note(partnerName() + ' 偷走了你的「' + (t.length > 14 ? t.slice(0, 14) + '…' : t) + '」');
     }
 
     /* ═══════════════ 三、查岗 ═══════════════ */
@@ -289,33 +273,21 @@
     /* ═══════════════ 四、绑定 ═══════════════ */
 
     function bind() {
-        document.addEventListener('click', function (e) {
-            var t = e.target;
-            if (!t || !t.closest) return;
-            if (t.closest('.cx-steal-btn') || t.closest('.cx-report-overlay')) return;
-
-            // 他自己的消息旁边不弹
-            var m = t.closest('.message.message-sent');
-            if (m) {
-                var text = msgText(m);
-                if (text && text.length <= 200) { showSteal(m, text); return; }
-            }
-            hideSteal();
-        }, true);
-
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && !e.shiftKey && e.target && e.target.id === 'message-input') {
                 setTimeout(maybeReport, 2500);
+                setTimeout(autoSteal, 2800);
             }
         });
 
         document.addEventListener('click', function (e) {
             var t = e.target;
             if (!t || !t.closest) return;
-            if (t.closest('#send-btn')) setTimeout(maybeReport, 2500);
+            if (t.closest('#send-btn')) {
+                setTimeout(maybeReport, 2500);
+                setTimeout(autoSteal, 2800);
+            }
         }, true);
-
-        window.addEventListener('resize', hideSteal);
     }
 
     /* ═══════════════ 五、启动 ═══════════════ */
@@ -342,7 +314,7 @@
     }
 
     window.ChatPlus = {
-        steal: function (t) { if (t) doSteal(String(t)); },
+        steal: autoSteal,
         report: openReport,
         pick: cardPick
     };
