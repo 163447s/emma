@@ -356,7 +356,7 @@
         const ja = document.getElementById('translate-send-ja');
         const cur = getSendLang();
         if (zh) zh.classList.toggle('active', cur === 'zh');
-        if (ja) ja.classList.toggle('active', cur === 'ja');
+        if (ja) { ja.classList.remove('active'); ja.style.display = 'none'; }
     }
 
     // ── API Key 配置弹窗 ────────────────────────────────
