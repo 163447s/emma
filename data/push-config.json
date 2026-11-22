@@ -1,6 +1,9 @@
 {
   "name": "无一郎",
-  "chance": 1.0,
-  "hours": [9, 22],
+  "chance": 0.22,
+  "hours": [
+    9,
+    22
+  ],
   "maxPerDay": 8
 }
