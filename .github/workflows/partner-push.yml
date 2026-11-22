@@ -3,7 +3,7 @@ name: partner-push
 on:
   schedule:
     # UTC 01:00-14:00 = 北京时间 09:00-22:00，每半小时看一次
-    - cron: '*/30 1-14 * * *'
+    - cron: '*/20 1-15 * * *'
   workflow_dispatch:
 
 permissions:
