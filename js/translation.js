@@ -341,14 +341,14 @@
     // ── 发送模式：发中文 / 发日本語（Enter 按下按当前选中模式发送）──
     const SEND_LANG_KEY = 'sendLangPreference';
     function getSendLang() {
-        try { return localStorage.getItem(SEND_LANG_KEY) === 'zh' ? 'zh' : 'ja'; } catch (e) { return 'ja'; }
+        return 'zh';               // 固定：一律走「中文（日语译文）」发送
     }
     function setSendLang(lang) {
         const v = lang === 'zh' ? 'zh' : 'ja';
         try { localStorage.setItem(SEND_LANG_KEY, v); } catch (e) {}
         refreshSendLangButtons();
         if (typeof showNotification === 'function') {
-            showNotification(v === 'zh' ? '已切换：Enter 将以中文原文发送' : '已切换：Enter 将自动翻译为日语发送', 'success', 1600);
+            showNotification('Enter 发送：中文（自动带日语译文）', 'success', 1600);
         }
     }
     function refreshSendLangButtons() {

@@ -1661,18 +1661,16 @@ if (!isBatchMode && type === 'normal') {
             if (imageFile) {
                 showNotification('正在优化图片...', 'info', 1500);
                 optimizeImage(imageFile).then(createMessage).catch(() => showNotification('图片处理失败', 'error'));
-            } else if (type === 'normal' && !textOverride && text && !isBatchMode && window.Translation && typeof window.Translation.translateText === 'function') {
-                // 按发送模式处理：发日本語 → 自动翻译为日语；发中文 → 直接发原文
-                const sendLang = (window.Translation.getSendLang ? window.Translation.getSendLang() : 'ja');
-                if (sendLang === 'zh') {
+            } else if (type === 'normal' && !textOverride && text && !isBatchMode) {
+                // 统一格式：气泡显示「中文（日语译文）」；翻不出来就原样发
+                const _fillText = (window.CardTrans && typeof window.CardTrans.fill === 'function')
+                    ? window.CardTrans.fill(text)
+                    : Promise.resolve(text);
+                _fillText.then(t => {
+                    const full = (t && String(t).trim()) ? String(t).trim() : text;
+                    if (full !== text) { _sendText = full; _originalText = text; }
                     createMessage();
-                } else {
-                    window.Translation.translateText(text, 'ja').then(t => {
-                        const ja = (t && String(t).trim() && String(t).trim() !== text) ? String(t).trim() : null;
-                        if (ja) { _sendText = ja; _originalText = text; }
-                        createMessage();
-                    }).catch(() => { createMessage(); });
-                }
+                }).catch(() => { createMessage(); });
             } else {
                 createMessage();
             }
@@ -1745,17 +1743,24 @@ if (!isBatchMode && type === 'normal') {
         function sendBatchMessages() {
             if (batchMessages.length === 0) return;
             showNotification(`正在发送 ${batchMessages.length} 条消息...`, 'info', 2000);
-            batchMessages.forEach((msg, index) => {
-                setTimeout(() => {
-                    addMessage({
-                        id: Date.now() + index, sender: 'user', text: msg.text || '', image: msg.image || null, timestamp: new Date(), status: 'sent', favorited: false, type: 'normal'
-                    });
-                    playSound('send');
-                }, index * 300);
+            // 批量也统一成「中文（日语译文）」
+            const _batch = batchMessages.slice();
+            const _fill = (s) => (window.CardTrans && typeof window.CardTrans.fill === 'function')
+                ? window.CardTrans.fill(s)
+                : Promise.resolve(s);
+            Promise.all(_batch.map(m => m.text ? _fill(m.text).catch(() => m.text) : Promise.resolve(m.text || ''))).then(texts => {
+                _batch.forEach((msg, index) => {
+                    setTimeout(() => {
+                        addMessage({
+                            id: Date.now() + index, sender: 'user', text: texts[index] || msg.text || '', image: msg.image || null, timestamp: new Date(), status: 'sent', favorited: false, type: 'normal'
+                        });
+                        playSound('send');
+                    }, index * 300);
+                });
+                const delayRange = settings.replyDelayMax - settings.replyDelayMin;
+                const randomDelay = settings.replyDelayMin + Math.random() * delayRange;
+                setTimeout(simulateReply, _batch.length * 300 + randomDelay);
             });
-            const delayRange = settings.replyDelayMax - settings.replyDelayMin;
-            const randomDelay = settings.replyDelayMin + Math.random() * delayRange;
-            setTimeout(simulateReply, batchMessages.length * 300 + randomDelay);
             isBatchMode = false; batchMessages = [];
             DOMElements.batchBtn.classList.remove('active'); DOMElements.batchPreview.style.display = 'none';
             const placeholder = "";
