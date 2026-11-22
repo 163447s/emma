@@ -52,6 +52,60 @@
         }
     }
 
+
+    /* ── Web Push：服务器直接推到手机，页面关着也能弹 ── */
+    var VAPID_PUBLIC = 'BP8pib2ENqq2YwPjnc2s1CzxOv3js9qLCeP1rWck53sTklrRs3t_0bR3LhdHMccnSKJ3x7lTP7Rx2_gdA-ZptR0';
+    var SUB_KEY = 'cx_webpush_sub';
+
+    function b64uToBytes(s) {
+        s = (s || '').replace(/-/g, '+').replace(/_/g, '/');
+        while (s.length % 4) s += '=';
+        var raw = atob(s), arr = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+        return arr;
+    }
+
+    function webPushSupported() {
+        return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+    }
+
+    function savedSub() {
+        try { return localStorage.getItem(SUB_KEY) || ''; } catch (e) { return ''; }
+    }
+
+    function enableWebPush() {
+        if (!webPushSupported()) {
+            toast('这个浏览器不支持后台推送', 'error');
+            return Promise.reject(new Error('unsupported'));
+        }
+        return Notification.requestPermission().then(function (p) {
+            if (p !== 'granted') { toast('通知权限没给，推不了', 'error'); throw new Error('permission:' + p); }
+            return navigator.serviceWorker.ready;
+        }).then(function (reg) {
+            return reg.pushManager.getSubscription().then(function (sub) {
+                if (sub) return sub;
+                return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(VAPID_PUBLIC) });
+            });
+        }).then(function (sub) {
+            var json = JSON.stringify(sub.toJSON());
+            try { localStorage.setItem(SUB_KEY, json); } catch (e) {}
+            toast('已开启，服务器能直接推到手机了', 'success');
+            return json;
+        }).catch(function (e) {
+            var why = (e && (e.name || e.message)) || '未知';
+            toast('订阅失败：' + why, 'error');
+            throw e;
+        });
+    }
+
+    function disableWebPush() {
+        try { localStorage.removeItem(SUB_KEY); } catch (e) {}
+        if (!('serviceWorker' in navigator)) return Promise.resolve();
+        return navigator.serviceWorker.ready.then(function (reg) {
+            return reg.pushManager.getSubscription().then(function (sub) { return sub ? sub.unsubscribe() : null; });
+        }).then(function () { toast('已取消浏览器推送', 'info'); }).catch(function () {});
+    }
+
     /* ── 统一出口：只有页面不在前台才提醒 ── */
     function notify(text) {
         text = (text || '').replace(/\s+/g, ' ').trim();
@@ -190,7 +244,14 @@
       <span>切到后台时弹系统通知</span>
       <button class="cxpush-toggle" id="cxpush-toggle"></button>
     </div>
-    <div class="cxpush-tip">系统通知需要允许一次权限；这个开关只管本机的通知栏，不影响微信那边。</div>
+    <div class="cxpush-tip">上面这个开关只在页面还活着时有用；页面关掉或被系统冻结，就靠下面这条。</div>
+    <div class="cxpush-row">
+      <button class="cxpush-btn" id="cxpush-webpush">开启浏览器推送</button>
+      <button class="cxpush-btn ghost" id="cxpush-webpush-off">取消</button>
+    </div>
+    <div class="cxpush-tip" id="cxpush-substate"></div>
+    <textarea id="cxpush-subjson" readonly style="width:100%;height:86px;margin-top:6px;padding:8px;border-radius:10px;border:1px solid rgba(140,170,195,.3);font-size:11px;color:#456;background:#fff;display:none;resize:none;font-family:inherit;"></textarea>
+    <div class="cxpush-tip">开启后，服务器会直接把消息推到这台手机的通知栏，跟微信、QQ 一样不需要打开网页。若提示「订阅失败」，把下面的错误信息和手机型号告诉我。</div>
   </div>
   <div class="cxpush-ft">
     <button class="cxpush-btn" id="cxpush-test">发一条测试通知</button>
@@ -209,6 +270,34 @@
             toggle.classList.toggle('on', on);
             try { localStorage.setItem(ON_KEY, on ? '1' : '0'); } catch (e) {}
             toast(on ? '已开启后台通知' : '已关闭后台通知', 'success');
+        });
+
+        var subState = mask.querySelector('#cxpush-substate');
+        var subBox = mask.querySelector('#cxpush-subjson');
+
+        function refreshSub() {
+            var saved = savedSub();
+            if (saved) {
+                subState.textContent = '✓ 这台手机已登记浏览器推送';
+                subBox.style.display = 'block';
+                subBox.value = saved;
+            } else {
+                subState.textContent = webPushSupported() ? '未开启（这台设备的浏览器支持后台推送）' : '未开启（这个浏览器不支持后台推送）';
+                subBox.style.display = 'none';
+            }
+        }
+        refreshSub();
+
+        mask.querySelector('#cxpush-webpush').addEventListener('click', function () {
+            enableWebPush().then(function () { refreshSub(); }).catch(function () { refreshSub(); });
+        });
+        mask.querySelector('#cxpush-webpush-off').addEventListener('click', function () {
+            disableWebPush().then(refreshSub);
+        });
+        subBox.addEventListener('click', function () {
+            subBox.select();
+            try { if (navigator.clipboard) navigator.clipboard.writeText(subBox.value); toast('已复制', 'success'); }
+            catch (e) {}
         });
 
         mask.querySelector('#cxpush-test').addEventListener('click', function () {
@@ -248,7 +337,9 @@
             wx: wxPush,
             panel: openPanel,
             token: getToken,
-            on: isOn
+            on: isOn,
+            webpush: enableWebPush,
+            sub: savedSub
         };
         setTimeout(pullOffline, 4500);
         setTimeout(ensureEntry, 400);

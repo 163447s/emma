@@ -3,7 +3,7 @@
  * 并更新 index.html 中 js 文件的 ?v= 参数，用户才会加载到新版本。
  * v3：图标 URL 加版本参数（?v=2），强制刷新已安装的图标缓存。
  */
-const CACHE_NAME = 'milk-emma-v54';
+const CACHE_NAME = 'milk-emma-v55';
 
 /* 核心资源（同源，首次访问时预缓存） */
 const CORE_ASSETS = [
@@ -33,9 +33,9 @@ const CORE_ASSETS = [
   './js/app.js',
   './js/features/launcher.js?v=20261122f',
   './js/features/channeling.js?v=20261122b',
-  './js/features/chatplus.js?v=20261122d',
+  './js/features/chatplus.js?v=20261122e',
   './js/features/cardtrans.js?v=20261122c',
-  './js/features/push.js?v=20261122d',
+  './js/features/push.js?v=20261122e',
   './js/features/moments.js?v=20261122a',
   './icons/icon-192.png?v=2',
   './icons/icon-512.png?v=2',
@@ -142,6 +142,34 @@ self.addEventListener('fetch', function (event) {
       }).catch(function () {
         return cached;
       });
+    })
+  );
+});
+
+/* ── Web Push：服务器直接推到手机（不依赖页面是否打开） ── */
+self.addEventListener('push', function (event) {
+  var payload = {};
+  try { payload = event.data ? event.data.json() : {}; }
+  catch (e) { payload = { title: '他', body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(
+    self.registration.showNotification(payload.title || '他', {
+      body: payload.body || '',
+      icon: './icons/icon-192.png?v=2',
+      badge: './icons/icon-192.png?v=2',
+      tag: 'cx-partner-push',
+      renotify: true
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      for (var i = 0; i < list.length; i++) {
+        if ('focus' in list[i]) return list[i].focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('./');
     })
   );
 });
