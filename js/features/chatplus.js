@@ -133,6 +133,45 @@
         return '';
     }
 
+    /* ═══ 偷来的卡：自动归到「偷来的」分组，方便单独整理 ═══ */
+    var STEAL_GROUP_NAME = '偷来的';
+    var STEAL_GROUP_COLOR = '#a08c7a';
+
+    function fileIntoStealGroup(text) {
+        try {
+            if (!Array.isArray(window.customReplyGroups)) window.customReplyGroups = [];
+            var gs = window.customReplyGroups;
+            var g = null;
+            for (var i = 0; i < gs.length; i++) {
+                if (gs[i] && String(gs[i].name || '') === STEAL_GROUP_NAME) { g = gs[i]; break; }
+            }
+            if (!g) {
+                g = { id: Date.now(), name: STEAL_GROUP_NAME, color: STEAL_GROUP_COLOR, disabled: false, items: [] };
+                gs.push(g);                       // 新组排在最后，原来分组的顺序不动
+            }
+            if (!Array.isArray(g.items)) g.items = [];
+
+            /* 同一句只留一份：若它本来在别的组，从那儿摘走 */
+            gs.forEach(function (x) {
+                if (!x || x === g || !Array.isArray(x.items)) return;
+                for (var j = x.items.length - 1; j >= 0; j--) {
+                    if (String(x.items[j] == null ? '' : x.items[j]).trim() === text) x.items.splice(j, 1);
+                }
+            });
+            if (g.items.indexOf(text) === -1) g.items.push(text);
+
+            try {
+                var key = getStorageKey('customReplyGroups');
+                if (key && typeof localforage !== 'undefined') localforage.setItem(key, gs);
+            } catch (e) {}
+            try { if (typeof throttledSaveData === 'function') throttledSaveData(); } catch (e) {}
+            try {
+                if (typeof renderReplyLibrary === 'function' && document.getElementById('custom-replies-list')) renderReplyLibrary();
+            } catch (e) {}
+            return true;
+        } catch (e) { return false; }
+    }
+
     function autoSteal() {
         if (Date.now() - stealLastAt() < STEAL_COOLDOWN) return;
         var t = mineText();
@@ -147,6 +186,7 @@
             if (!Array.isArray(list)) { list = []; window._customReplies = list; }
             if (list.some(function (x) { return String(x == null ? '' : x).trim() === val; })) return;
             list.push(val);
+            fileIntoStealGroup(val);      // 偷来的卡单独归组
             saveCards();
             stampSteal();
             note(partnerName() + ' 偷走了你的「' + (val.length > 14 ? val.slice(0, 14) + '…' : val) + '」');
@@ -330,6 +370,7 @@
     window.ChatPlus = {
         steal: autoSteal,
         report: openReport,
-        pick: cardPick
+        pick: cardPick,
+        file: fileIntoStealGroup
     };
 })();
