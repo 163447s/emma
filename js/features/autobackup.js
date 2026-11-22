@@ -22,7 +22,7 @@
     function run(force) {
         if (busy) return false;
         if (!force && !enabled()) return false;
-        var be = window.BackupEngine;
+        var be = window.ChatBackup || window.BackupEngine;
         if (!be || typeof be.exportBackupToFile !== 'function') return false;
 
         busy = true;
