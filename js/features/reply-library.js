@@ -2150,25 +2150,47 @@ function _showBatchAddDialog() {
 
     panel.querySelector('#ba-cancel').onclick = () => overlay.remove();
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    panel.querySelector('#ba-confirm').onclick = () => {
+    panel.querySelector('#ba-confirm').onclick = async () => {
         const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
         if (!lines.length) { showNotification('请输入内容', 'warning'); return; }
+
+        /* 主字卡：先补成「日语译文（中文原文）」再入库，跟聊天消息同一格式 */
+        const finalMap = {};
+        if (currentSubTab === 'custom' && window.CardTrans && typeof window.CardTrans.fill === 'function') {
+            showNotification('正在翻译…', 'info', 1500);
+            await Promise.all(lines.map(async (val) => {
+                try { finalMap[val] = (await window.CardTrans.fill(val)) || val; }
+                catch (e) { finalMap[val] = val; }
+            }));
+        } else {
+            lines.forEach(v => { finalMap[v] = v; });
+        }
+
+        /* 去重时也比对括号里的中文原文，免得同一句换个格式又加一遍 */
+        const coreOf = (s) => {
+            const t = String(s == null ? '' : s).trim();
+            const m = t.match(/^[^（）()]*?[（(]([^（）()]{1,120})[）)]$/);
+            return m ? m[1].trim() : t;
+        };
+
         let added = 0, skipped = 0;
         const newItems = [];
         lines.forEach(val => {
-            const norm = normalizeStringStrict(val);
+            const out = finalMap[val] || val;
+            const norm = normalizeStringStrict(out);
+            const coreNorm = normalizeStringStrict(coreOf(out));
             const isDup = currentSubTab === 'custom'
-                ? (customReplies.some(r => normalizeStringStrict(r) === norm) || CONSTANTS.REPLY_MESSAGES.some(r => normalizeStringStrict(r) === norm))
+                ? (customReplies.some(r => normalizeStringStrict(r) === norm || normalizeStringStrict(coreOf(r)) === coreNorm) || CONSTANTS.REPLY_MESSAGES.some(r => normalizeStringStrict(r) === norm))
                 : currentSubTab === 'pokes'
                 ? customPokes.some(r => normalizeStringStrict(r) === norm)
                 : currentSubTab === 'statuses'
                 ? customStatuses.some(r => normalizeStringStrict(r) === norm)
                 : false;
             if (isDup) { skipped++; return; }
-            if (currentSubTab === 'custom') { customReplies.push(val); newItems.push(val); }
-            else if (currentSubTab === 'pokes') { customPokes.push(val); newItems.push(val); }
-            else if (currentSubTab === 'statuses') { customStatuses.push(val); newItems.push(val); }
-            else if (currentSubTab === 'mottos') customMottos.push(val);
+            if (currentSubTab === 'custom') { customReplies.push(out); newItems.push(out); }
+            else if (currentSubTab === 'pokes') { customPokes.push(out); newItems.push(out); }
+            else if (currentSubTab === 'statuses') { customStatuses.push(out); newItems.push(out); }
+            else if (currentSubTab === 'mottos') customMottos.push(out);
             added++;
         });
         if (_selectedGroupIdx >= 0 && newItems.length > 0 && groups) {
