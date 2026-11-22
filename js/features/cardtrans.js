@@ -157,15 +157,9 @@
         return inner + '（' + outer + '）';
     }
 
+    /* 全中文模式：不再生成任何日语 */
     function fillJp(text) {
-        var t = String(text == null ? '' : text).trim();
-        if (!t || isTarot(t)) return Promise.resolve(t);
-        var swapped = jpFirst(t);
-        if (swapped) return Promise.resolve(swapped);
-        if (hasPair(t)) return Promise.resolve(t);
-        return translate([t]).then(function (a) {
-            return composeJp(t, a && a[0]);
-        }).catch(function () { return t; });
+        return Promise.resolve(String(text == null ? '' : text).trim());
     }
 
     /* 旧消息里「中文（日语）」的，换成「日语（中文）」。幂等，每轮都能再查一遍。 */
@@ -189,11 +183,7 @@
 
     /* 单条：给新加的字卡现翻现拼 */
     function fill(text) {
-        var t = String(text == null ? '' : text).trim();
-        if (!t || hasPair(t) || isTarot(t)) return Promise.resolve(t);
-        return translate([t]).then(function (a) {
-            return compose(t, a && a[0]);
-        }).catch(function () { return t; });
+        return Promise.resolve(String(text == null ? '' : text).trim());
     }
 
     function countNeed(list) {
@@ -386,8 +376,9 @@
     }
 
     function boot() {
-        setTimeout(function () { repairGroups(); migrateCards(); scan(); migrateChat(); }, 2500);   // 打开先归组、换格式、补翻译
-        setInterval(function () { repairGroups(); migrateCards(); scan(); migrateChat(); }, 45 * 1000);
+        /* 全中文模式：只做分组归位，不再 migrage/补日语 */
+        setTimeout(function () { repairGroups(); }, 2500);
+        setInterval(function () { repairGroups(); }, 45 * 1000);
     }
 
     if (document.readyState === 'loading') {
