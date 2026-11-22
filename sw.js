@@ -31,8 +31,8 @@ const CORE_ASSETS = [
   './js/onboarding.js',
   './js/listeners.js?v=20261122a',
   './js/app.js',
-  './js/features/autobackup.js?v=20261122c
-  './js/features/dejapanese.js?v=20261122a'',
+  './js/features/autobackup.js?v=20261122c',
+  './js/features/dejapanese.js?v=20261122a',
   './js/features/launcher.js?v=20261122f',
   './js/features/channeling.js?v=20261122b',
   './js/features/chatplus.js?v=20261122h',
