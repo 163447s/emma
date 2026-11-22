@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""他的主动消息 —— GitHub Actions 定时跑一次（WxPusher 通道，免费不用实名）。
+"""他的主动消息 —— GitHub Actions 定时跑一次（PushPlus 通道，消息直接进微信服务号）。
 
 流程：读字卡池 → 掷一次概率 → 抽一句 → 发到微信 → 记进 offline-messages.json
 这句会同时出现在「离线补消息」里，她下次打开站点时自动补进聊天。
@@ -18,7 +18,7 @@ CONFIG = os.path.join(ROOT, 'data', 'push-config.json')
 OFFLINE = os.path.join(ROOT, 'data', 'offline-messages.json')
 
 BJT = datetime.timezone(datetime.timedelta(hours=8))
-API = 'https://wxpusher.zjiecode.com/api/send/message'
+API = 'https://www.pushplus.plus/send'
 
 
 def load(path, default):
@@ -35,9 +35,9 @@ def save(path, data):
 
 
 def main():
-    token = (os.environ.get('WXPUSHER_APP_TOKEN') or '').strip()
+    token = (os.environ.get('PUSHPLUS_TOKEN') or '').strip()
     if not token:
-        print('没有配置 WXPUSHER_APP_TOKEN，跳过')
+        print('没有配置 PUSHPLUS_TOKEN，跳过')
         return
 
     cfg = load(CONFIG, {})

@@ -1,7 +1,6 @@
 {
   "name": "无一郎",
-  "chance": 0.22,
+  "chance": 1.0,
   "hours": [9, 22],
-  "maxPerDay": 8,
-  "uid": "UID_z6ia76o2hUtYIUpfipg8vryOZ2Qf"
+  "maxPerDay": 8
 }
