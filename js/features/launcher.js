@@ -74,47 +74,45 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 
 .cx-home-inner { width: 100%; max-width: 440px; margin: auto; }
 
-.cx-brand { text-align: center; margin-bottom: 24px; }
-.cx-mark {
-  width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 16px;
-  background: #c25b3f; color: #fff; line-height: 54px; font-size: 25px;
-  font-family: "Noto Serif SC", "Songti SC", serif;
-  box-shadow: 0 10px 26px rgba(194, 91, 63, .26);
-}
+.cx-brand { text-align: center; margin-bottom: 20px; }
 .cx-brand h1 {
-  margin: 0; font-size: 26px; font-weight: 600; letter-spacing: 6px; text-indent: 6px;
-  font-family: "Noto Serif SC", "Songti SC", serif; color: #2b2723;
+  margin: 0; font-size: 24px; font-weight: 500; letter-spacing: 8px; text-indent: 8px;
+  font-family: "Noto Serif SC", "Songti SC", serif; color: #47657f;
 }
-.cx-brand p { margin: 9px 0 0; font-size: 12px; color: #8a8178; letter-spacing: .5px; }
+.cx-brand p { margin: 8px 0 0; font-size: 11.5px; color: #8ea6ba; letter-spacing: .5px; }
 
 .cx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .cx-card {
   display: flex; flex-direction: column; gap: 9px;
-  padding: 14px 13px; border-radius: 15px;
-  background: #fff; border: 1px solid #ece3d8;
-  box-shadow: 0 5px 18px rgba(120, 92, 70, .09);
+  padding: 15px 14px; border-radius: 18px;
+  background: rgba(255, 255, 255, .52);
+  border: 1px solid rgba(255, 255, 255, .78);
+  box-shadow: 0 6px 16px rgba(132, 166, 196, .10);
+  backdrop-filter: blur(9px) saturate(1.05); -webkit-backdrop-filter: blur(9px) saturate(1.05);
   text-align: left; cursor: pointer;
-  transition: transform .15s ease, box-shadow .15s ease;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
 }
-.cx-card:active { transform: scale(.975); box-shadow: 0 2px 8px rgba(120, 92, 70, .10); }
+.cx-card:active { transform: scale(.975); background: rgba(255, 255, 255, .66); box-shadow: 0 2px 8px rgba(132, 166, 196, .12); }
 .cx-card.cx-wide { grid-column: span 2; flex-direction: row; align-items: center; gap: 12px; }
 
 .cx-ico {
-  flex: none; width: 36px; height: 36px; border-radius: 11px;
-  display: flex; align-items: center; justify-content: center; font-size: 14px;
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+  color: #5d7d97 !important; background: rgba(255, 255, 255, .6) !important;
+  border: 1px solid rgba(255, 255, 255, .8);
 }
-.cx-name { display: block; font-size: 14px; font-weight: 600; color: #2b2723; letter-spacing: .3px; }
-.cx-desc { display: block; font-size: 10.5px; color: #8a8178; line-height: 1.45; margin-top: 3px; }
+.cx-name { display: block; font-size: 13.5px; font-weight: 600; color: #40607a; letter-spacing: .3px; }
+.cx-desc { display: block; font-size: 10.5px; color: #8ba4b9; line-height: 1.45; margin-top: 3px; }
 .cx-body { flex: 1; min-width: 0; }
 
 .cx-foot { margin-top: 18px; text-align: center; }
 .cx-gear {
-  border: none; background: none; color: #8a8178; font-size: 11.5px;
+  border: none; background: none; color: #7e97ac; font-size: 11.5px;
   padding: 8px 12px; cursor: pointer; font-family: inherit;
 }
 .cx-gear i { margin-right: 5px; font-size: 10.5px; }
-.cx-note { display: block; margin-top: 6px; font-size: 10px; color: #b5aa9d; }
+.cx-note { display: block; margin-top: 6px; font-size: 10px; color: #a4b9ca; }
 
 /* 聊天页左下角的回首页小按钮 */
 #cx-fab {
@@ -149,7 +147,7 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
       if (it.key === 'chat') {
         return `
         <div class="cx-card cx-wide" data-key="${it.key}">
-          <span class="cx-ico" style="color:${fg};background:${bg}"><i class="fas ${it.icon}"></i></span>
+          <span class="cx-ico" ><i class="fas ${it.icon}"></i></span>
           <span class="cx-body">
             <span class="cx-name">${it.name}</span>
             <span class="cx-desc">${it.desc}</span>
@@ -159,7 +157,7 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
       }
       return `
       <div class="cx-card" data-key="${it.key}">
-        <span class="cx-ico" style="color:${fg};background:${bg}"><i class="fas ${it.icon}"></i></span>
+        <span class="cx-ico" ><i class="fas ${it.icon}"></i></span>
         <span class="cx-body">
           <span class="cx-name">${it.name}</span>
           <span class="cx-desc">${it.desc}</span>
@@ -170,7 +168,6 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
     homeEl.innerHTML = `
       <div class="cx-home-inner">
         <div class="cx-brand">
-          <div class="cx-mark">伝</div>
           <h1>传讯</h1>
           <p>选一个地方，先开口</p>
         </div>
