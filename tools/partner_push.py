@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""他的主动消息 —— GitHub Actions 定时跑一次。
+"""他的主动消息 —— GitHub Actions 定时跑一次（WxPusher 通道，免费不用实名）。
 
-流程：读字卡池 → 掷一次概率 → 抽一句 → PushPlus 发微信 → 记进 offline-messages.json
+流程：读字卡池 → 掷一次概率 → 抽一句 → 发到微信 → 记进 offline-messages.json
 这句会同时出现在「离线补消息」里，她下次打开站点时自动补进聊天。
 """
 import datetime
@@ -9,7 +9,6 @@ import json
 import os
 import random
 import subprocess
-import sys
 import time
 import urllib.request
 
@@ -19,6 +18,7 @@ CONFIG = os.path.join(ROOT, 'data', 'push-config.json')
 OFFLINE = os.path.join(ROOT, 'data', 'offline-messages.json')
 
 BJT = datetime.timezone(datetime.timedelta(hours=8))
+API = 'https://wxpusher.zjiecode.com/api/send/message'
 
 
 def load(path, default):
@@ -35,12 +35,17 @@ def save(path, data):
 
 
 def main():
-    token = (os.environ.get('PUSHPLUS_TOKEN') or '').strip()
+    token = (os.environ.get('WXPUSHER_APP_TOKEN') or '').strip()
     if not token:
-        print('没有配置 PUSHPLUS_TOKEN，跳过')
+        print('没有配置 WXPUSHER_APP_TOKEN，跳过')
         return
 
     cfg = load(CONFIG, {})
+    uid = (cfg.get('uid') or '').strip()
+    if not uid:
+        print('push-config.json 里没有 uid，跳过')
+        return
+
     cards = load(CARDS, [])
     if not isinstance(cards, list) or not cards:
         print('字卡池是空的（data/push-cards.json），跳过')
@@ -71,17 +76,20 @@ def main():
     name = cfg.get('name') or '他'
 
     payload = json.dumps({
-        'token': token,
-        'title': name,
+        'appToken': token,
         'content': text,
-        'template': 'txt',
+        'summary': name,
+        'contentType': 1,
+        'uids': [uid],
     }, ensure_ascii=False).encode('utf-8')
-    req = urllib.request.Request(
-        'https://www.pushplus.plus/send', data=payload,
-        headers={'Content-Type': 'application/json'})
+    req = urllib.request.Request(API, data=payload, headers={'Content-Type': 'application/json'})
     try:
-        resp = urllib.request.urlopen(req, timeout=15).read().decode('utf-8', 'ignore')
-        print('推送结果：', resp[:200])
+        body = urllib.request.urlopen(req, timeout=20).read().decode('utf-8', 'ignore')
+        print('推送结果：', body[:200])
+        res = json.loads(body)
+        if not res.get('success'):
+            print('推送未成功，不写离线记录')
+            return
     except Exception as e:
         print('推送失败：', e)
         return

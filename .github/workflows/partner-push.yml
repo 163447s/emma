@@ -23,6 +23,6 @@ jobs:
           python-version: '3.11'
       - name: 掷一次概率，抽一句他的字卡
         env:
-          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          WXPUSHER_APP_TOKEN: ${{ secrets.WXPUSHER_APP_TOKEN }}
         run: python tools/partner_push.py
 

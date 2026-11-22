@@ -62,7 +62,6 @@
         if (!document.hidden) return;          // 她正看着，页内有气泡就够了
         var who = partnerName();
         sysNotify(who, text.length > 80 ? text.slice(0, 80) + '…' : text);
-        if (isOn()) wxPush(who, text);
     }
 
     /* ── 监听聊天里新出现的「他那侧」气泡 ── */
@@ -184,28 +183,22 @@
 <div class="cxpush-box">
   <div class="cxpush-hd"><b>消息推送</b><button class="cxpush-x">×</button></div>
   <div class="cxpush-bd">
-    他在聊天里说话、而这个页面已经不在前台（切走了 / 锁屏了）时提醒你。<br>
-    微信推送要 PushPlus：在 <a href="https://www.pushplus.plus" target="_blank">pushplus.plus</a>
-    用微信扫码登录，复制页面上的 token 填在下面。
-    <div class="cxpush-row">
-      <input type="text" id="cxpush-token" placeholder="粘贴 PushPlus token">
-    </div>
+    他在聊天里说话、而这个页面已经不在前台（切走了 / 锁屏了）时，弹手机通知栏。<br>
+    微信那边走的是服务器定时的「他来敲门」：你不在的时候，他会按概率抽一句字卡发到你微信，
+    下次打开这里，那几句会自动补进聊天。
     <div class="cxpush-sw">
-      <span>切到后台时推送到微信</span>
+      <span>切到后台时弹系统通知</span>
       <button class="cxpush-toggle" id="cxpush-toggle"></button>
     </div>
-    <div class="cxpush-tip">系统通知需要允许一次权限；token 只保存在这台设备上，不会上传。</div>
+    <div class="cxpush-tip">系统通知需要允许一次权限；这个开关只管本机的通知栏，不影响微信那边。</div>
   </div>
   <div class="cxpush-ft">
-    <button class="cxpush-btn ghost" id="cxpush-test">发送测试</button>
-    <button class="cxpush-btn" id="cxpush-save">保存</button>
+    <button class="cxpush-btn" id="cxpush-test">发一条测试通知</button>
   </div>
 </div>`;
         document.body.appendChild(mask);
 
-        var input = mask.querySelector('#cxpush-token');
         var toggle = mask.querySelector('#cxpush-toggle');
-        input.value = getToken();
         toggle.classList.toggle('on', isOn());
 
         mask.querySelector('.cxpush-x').addEventListener('click', function () { mask.remove(); });
@@ -215,25 +208,15 @@
             var on = !toggle.classList.contains('on');
             toggle.classList.toggle('on', on);
             try { localStorage.setItem(ON_KEY, on ? '1' : '0'); } catch (e) {}
-            toast(on ? '已开启微信推送' : '已关闭微信推送', 'success');
-        });
-
-        mask.querySelector('#cxpush-save').addEventListener('click', function () {
-            try { localStorage.setItem(TOKEN_KEY, input.value.trim()); } catch (e) {}
-            toast(input.value.trim() ? '已保存，切到后台就会推微信' : '已清空 token', 'success');
+            toast(on ? '已开启后台通知' : '已关闭后台通知', 'success');
         });
 
         mask.querySelector('#cxpush-test').addEventListener('click', function () {
-            var t = input.value.trim();
-            try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {}
-            if (!t) { toast('先填 PushPlus token', 'warning'); return; }
-            var who = partnerName();
-            wxPush(who, '这是测试推送，收到了就说明通道通了。');
-            sysNotify(who, '这是测试通知');
             if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
             }
-            toast('已发测试，几秒后去微信看下', 'info');
+            sysNotify(partnerName(), '这是测试通知');
+            toast('已发，去通知栏看一眼', 'info');
         });
     }
 
