@@ -52,7 +52,7 @@
 
         // 2) 聊天记录
         try {
-            var a = (typeof messages !== 'undefined' && Array.isArray(messages)) ? messages : null;
+            var a = (window.messages && Array.isArray(window.messages)) ? window.messages : ((typeof messages !== 'undefined' && Array.isArray(messages)) ? messages : null);
             if (a && a.length) {
                 a.forEach(function (msg) {
                     if (!msg || typeof msg.text !== 'string' || !msg.text) return;
@@ -68,8 +68,8 @@
 
         if (!changedCards && !changedMsgs) return;
 
-        try { if (typeof saveData === 'function') saveData(); } catch (e) {}
-        setTimeout(function () { try { if (typeof throttledSaveData === 'function') throttledSaveData(); } catch (e) {} }, 1200);
+        try { (window.saveData || (typeof saveData === 'function' ? saveData : null) || function(){})(); } catch (e) {}
+        setTimeout(function () { try { (window.throttledSaveData || function(){})(); } catch (e) {} }, 1200);
         try { if (typeof renderMessages === 'function') renderMessages(true); } catch (e) {}
 
         try {
