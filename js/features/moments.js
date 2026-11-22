@@ -276,6 +276,7 @@
 
     var n = names();
     var list = load();
+    ensureCids(list);
 
     if (!list.length) {
       el.feed.innerHTML = '<div class="cxm-empty"><i class="far fa-image"></i><p>还没有动态</p><span>发第一条，等 TA 看见</span></div>';
@@ -306,10 +307,29 @@
           }).join('') + '</div>'
         : '';
 
-      // 评论
-      var comments = (p.comments || []).map(function (c) {
+      // 评论：可以回复某一条，显示成微信那种「B 回复 A：…」
+      var cmtList = p.comments || [];
+      var comments = cmtList.map(function (c) {
         var cn = (c.who === 'mj') ? n.mj : n.me;
-        return '<div class="cxm-cmt"><span class="cxm-cname">' + esc(cn) + '</span>：' + esc(c.text) + '</div>';
+        var replyTag = '';
+        if (c.replyTo) {
+          var tgtC = null;
+          for (var ci = 0; ci < cmtList.length; ci++) {
+            if (cmtList[ci].cid === c.replyTo) { tgtC = cmtList[ci]; break; }
+          }
+          if (tgtC) {
+            var tn = (tgtC.who === 'mj') ? n.mj : n.me;
+            replyTag = '<span class="cxm-creply">回复 ' + esc(tn) + '</span>';
+          }
+        }
+        var delC = (c.who === 'me' && c.cid)
+          ? '<button class="cxm-cdel" data-cdel="' + esc(c.cid) + '" title="删除这条评论">×</button>'
+          : '';
+        return '<div class="cxm-cmt" data-cmt="' + esc(c.cid || '') + '">' +
+          '<span class="cxm-cname">' + esc(cn) + '</span>' +
+          (replyTag ? replyTag + '：' : '：') +
+          esc(c.text) + delC +
+        '</div>';
       }).join('');
       var cmtBlock = comments ? '<div class="cxm-cmts">' + comments + '</div>' : '';
 
@@ -384,15 +404,57 @@
       return;
     }
 
+    // 删掉自己发的那条评论（连带它下面的回复）
+    var cdelEl = e.target.closest ? e.target.closest('[data-cdel]') : null;
+    if (cdelEl) {
+      var pcm = cdelEl.closest('.cxm-item');
+      var idcm = pcm && pcm.getAttribute('data-id');
+      var cidel = cdelEl.getAttribute('data-cdel');
+      if (!idcm || !cidel) return;
+      var ls0 = load();
+      for (var di = 0; di < ls0.length; di++) {
+        if (ls0[di].id !== idcm || !Array.isArray(ls0[di].comments)) continue;
+        ls0[di].comments = ls0[di].comments.filter(function (c) {
+          return c.cid !== cidel && c.replyTo !== cidel;
+        });
+        break;
+      }
+      save(ls0); render();
+      return;
+    }
+
+    // 点某条评论 → 直接回复它
+    var cmtEl = e.target.closest ? e.target.closest('[data-cmt]') : null;
+    if (cmtEl) {
+      var artR = cmtEl.closest('.cxm-item');
+      var wrapR = artR && artR.querySelector('.cxm-cwrap');
+      var cidR = cmtEl.getAttribute('data-cmt');
+      if (wrapR && cidR) {
+        var nameR = '';
+        var nameNode = cmtEl.querySelector('.cxm-cname');
+        if (nameNode) nameR = nameNode.textContent || '';
+        wrapR.setAttribute('data-replyto', cidR);
+        wrapR.classList.add('on');
+        var inpR = wrapR.querySelector('.cxm-cinput');
+        if (inpR) {
+          inpR.value = '';
+          inpR.placeholder = '回复 ' + nameR + '…';
+          inpR.focus();
+        }
+      }
+      return;
+    }
+
     // 打开评论输入
     var cbtn = e.target.closest ? e.target.closest('[data-comment]') : null;
     if (cbtn) {
       var art = cbtn.closest('.cxm-item');
       var wrap = art && art.querySelector('.cxm-cwrap');
       if (wrap) {
+        wrap.removeAttribute('data-replyto');
         wrap.classList.add('on');
         var inp = wrap.querySelector('.cxm-cinput');
-        if (inp) { inp.value = ''; inp.focus(); }
+        if (inp) { inp.value = ''; inp.placeholder = '说点什么…'; inp.focus(); }
       }
       return;
     }
@@ -406,14 +468,27 @@
       var txt = (inp2 && inp2.value || '').trim();
       if (!txt) return;
       // 发完收起输入行
-      if (inp2) inp2.value = '';
+      var replyToC = '';
       var wrap2 = art2.querySelector('.cxm-cwrap');
-      if (wrap2) wrap2.classList.remove('on');
-      addComment(idc, 'me', txt);
-      // 如果评的是梦角的动态，TA 有 15% 几率回一句
+      if (wrap2) {
+        replyToC = wrap2.getAttribute('data-replyto') || '';
+        wrap2.removeAttribute('data-replyto');
+        wrap2.classList.remove('on');
+      }
+      if (inp2) { inp2.value = ''; inp2.placeholder = '说点什么…'; }
+      var myCid = addComment(idc, 'me', txt, replyToC);
+      // 他偶尔接一句：评的是他的动态 15%；或者你回复的是他的话，也 15%
       var tgt = load().filter(function (x) { return x.id === idc; })[0];
+      var replyingToMJ = false;
+      if (tgt && replyToC && Array.isArray(tgt.comments)) {
+        for (var ri = 0; ri < tgt.comments.length; ri++) {
+          if (tgt.comments[ri].cid === replyToC && tgt.comments[ri].who === 'mj') { replyingToMJ = true; break; }
+        }
+      }
       if (tgt && tgt.who === 'mj' && Math.random() < 0.15) {
-        setTimeout(function () { mjComment(idc); }, 1600 + Math.random() * 2200);
+        setTimeout(function () { mjComment(idc, myCid); }, 1600 + Math.random() * 2200);
+      } else if (replyingToMJ && Math.random() < 0.15) {
+        setTimeout(function () { mjComment(idc, myCid); }, 1400 + Math.random() * 2000);
       }
       return;
     }
@@ -436,26 +511,50 @@
   }
 
   /* ── 评论 ── */
-  function addComment(postId, who, text) {
-    if (!postId || !text) return;
+  var _cidSeq = 0;
+  function newCid() {
+    _cidSeq++;
+    return 'c' + Date.now().toString(36) + _cidSeq.toString(36) + Math.random().toString(36).slice(2, 5);
+  }
+
+  /* 老数据没有评论 id，补上，才能点着回复 */
+  function ensureCids(list) {
+    var changed = false;
+    list.forEach(function (p) {
+      if (!Array.isArray(p.comments)) return;
+      p.comments.forEach(function (c) {
+        if (c && !c.cid) { c.cid = newCid(); changed = true; }
+      });
+    });
+    if (changed) save(list);
+    return list;
+  }
+
+  function addComment(postId, who, text, replyTo) {
+    if (!postId || !text) return '';
     var list = load();
+    var outCid = '';
     for (var i = 0; i < list.length; i++) {
       if (list[i].id === postId) {
         if (!list[i].comments) list[i].comments = [];
-        list[i].comments.push({ who: who, text: String(text).slice(0, 120), ts: Date.now() });
+        outCid = newCid();
+        var obj = { cid: outCid, who: who, text: String(text).slice(0, 120), ts: Date.now() };
+        if (replyTo) obj.replyTo = replyTo;
+        list[i].comments.push(obj);
         break;
       }
     }
     save(list);
     render();
+    return outCid;
   }
 
   /* 梦角在动态下面回一句：只从字卡库里抽（不走 AI） */
-  function mjComment(postId) {
+  function mjComment(postId, replyTo) {
     var pool = cardsPool();
     var pick = String(pool[Math.floor(Math.random() * pool.length)] || '').replace(/\s+/g, ' ').slice(0, 60);
-    if (!pick) return;
-    addComment(postId, 'mj', pick);
+    if (!pick) return '';
+    return addComment(postId, 'mj', pick, replyTo || '');
   }
 
   /* ── 发布 ── */
@@ -725,8 +824,13 @@
 
       /* 评论 */
       '.cxm-cmts { margin-top: 7px; }',
-      '.cxm-cmt { font-size: 13.5px; line-height: 1.6; color: #232323; padding: 2px 0; word-break: break-word; }',
-      '.cxm-cname { color: #576b95; font-weight: 500; cursor: pointer; }',
+      '.cxm-cmt { position: relative; font-size: 13.5px; line-height: 1.6; color: #232323; padding: 3px 18px 3px 0; word-break: break-word; cursor: pointer; }',
+      '.cxm-cmt:active { background: #f7f7f7; }',
+      '.cxm-cname { color: #576b95; font-weight: 500; }',
+      '.cxm-creply { color: #7a7a7a; font-size: 12.5px; margin-right: 2px; }',
+      '.cxm-cdel { position: absolute; right: 0; top: 3px; width: 16px; height: 16px; padding: 0; line-height: 14px;',
+      '  border: none; border-radius: 50%; background: #eee; color: #b0b0b0; font-size: 12px; cursor: pointer; }',
+      '.cxm-cdel:active { background: #e0e0e0; color: #888; }',
       '.cxm-cwrap { display: none; gap: 8px; margin-top: 8px; }',
       '.cxm-cwrap.on { display: flex; }',
       '.cxm-cinput { flex: 1 1 auto; min-width: 0; border: 1px solid #ededed; border-radius: 6px;',
