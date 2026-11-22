@@ -63,8 +63,8 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 #cx-home {
   position: fixed; inset: 0; z-index: 1000;
   background:
-    linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.3) 45%, rgba(255,255,255,0.42) 100%),
-    url('images/cx-home-bg.jpg') 50% 0% / cover no-repeat,
+    linear-gradient(180deg, rgba(255,255,255,0.46) 0%, rgba(255,255,255,0.3) 42%, rgba(255,255,255,0.4) 100%),
+    url('images/cx-home-bg-marble.jpg') 50% 0% / cover no-repeat,
     #f1f7fd;
   display: flex; align-items: center; justify-content: center;
   padding: max(22px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
