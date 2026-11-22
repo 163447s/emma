@@ -1662,9 +1662,9 @@ if (!isBatchMode && type === 'normal') {
                 showNotification('正在优化图片...', 'info', 1500);
                 optimizeImage(imageFile).then(createMessage).catch(() => showNotification('图片处理失败', 'error'));
             } else if (type === 'normal' && !textOverride && text && !isBatchMode) {
-                // 统一格式：气泡显示「中文（日语译文）」；翻不出来就原样发
-                const _fillText = (window.CardTrans && typeof window.CardTrans.fill === 'function')
-                    ? window.CardTrans.fill(text)
+                // 统一格式：气泡显示「日语译文（中文原文）」；翻不出来就原样发
+                const _fillText = (window.CardTrans && typeof window.CardTrans.fillJp === 'function')
+                    ? window.CardTrans.fillJp(text)
                     : Promise.resolve(text);
                 _fillText.then(t => {
                     const full = (t && String(t).trim()) ? String(t).trim() : text;
@@ -1743,10 +1743,10 @@ if (!isBatchMode && type === 'normal') {
         function sendBatchMessages() {
             if (batchMessages.length === 0) return;
             showNotification(`正在发送 ${batchMessages.length} 条消息...`, 'info', 2000);
-            // 批量也统一成「中文（日语译文）」
+            // 批量也统一成「日语译文（中文原文）」
             const _batch = batchMessages.slice();
-            const _fill = (s) => (window.CardTrans && typeof window.CardTrans.fill === 'function')
-                ? window.CardTrans.fill(s)
+            const _fill = (s) => (window.CardTrans && typeof window.CardTrans.fillJp === 'function')
+                ? window.CardTrans.fillJp(s)
                 : Promise.resolve(s);
             Promise.all(_batch.map(m => m.text ? _fill(m.text).catch(() => m.text) : Promise.resolve(m.text || ''))).then(texts => {
                 _batch.forEach((msg, index) => {

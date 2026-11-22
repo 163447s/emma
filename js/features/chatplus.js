@@ -153,8 +153,9 @@
         }
 
         /* 入库前补成「中文（日语）」，跟字卡库的格式保持一致 */
-        if (window.CardTrans && window.CardTrans.fill) {
-            window.CardTrans.fill(t).then(function (v) { finish(v || t); }).catch(function () { finish(t); });
+        if (window.CardTrans && (window.CardTrans.fillJp || window.CardTrans.fill)) {
+            var _f = window.CardTrans.fillJp || window.CardTrans.fill;
+            _f(t).then(function (v) { finish(v || t); }).catch(function () { finish(t); });
         } else {
             finish(t);
         }

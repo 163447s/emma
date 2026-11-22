@@ -51,13 +51,8 @@
     function isTarot(s) { return s.indexOf('__TAROT__') === 0; }
 
     function compose(orig, tr) {
-        orig = String(orig == null ? '' : orig).trim();
-        tr = String(tr == null ? '' : tr).trim();
-        if (!tr) return orig;
-        /* 原句没有句末标点，就别让译文硬加一个句号 */
-        if (!/[。！？!?…]$/.test(orig)) tr = tr.replace(/[。.]$/, '');
-        if (isJP(orig)) return tr + '（' + orig + '）';
-        return orig + '（' + tr + '）';
+        /* 统一格式：日语在前、中文原文在括号里 */
+        return composeJp(orig, tr);
     }
 
     /* ── 有道：一条一句，串行 ── */
@@ -138,6 +133,61 @@
         try {
             if (typeof renderReplyLibrary === 'function' && document.getElementById('custom-replies-list')) renderReplyLibrary();
         } catch (e) {}
+    }
+
+    /* ── 聊天新格式：日语在前、中文原文在括号里（方便他阅读）── */
+    function composeJp(orig, tr) {
+        orig = String(orig == null ? '' : orig).trim();
+        tr = String(tr == null ? '' : tr).trim();
+        if (!tr) return orig;
+        if (!/[。！？!?…]$/.test(orig)) tr = tr.replace(/[。.]$/, '');
+        if (isJP(orig)) return orig + '（' + tr + '）';   // 本来就是日语 → 日语（中文）
+        return tr + '（' + orig + '）';                   // 中文 → 日语译文（中文原文）
+    }
+
+    /* 已是「X（Y）」的，把日语挪到前面；日语本来就在前面就返回 null 表示不用动 */
+    function jpFirst(s) {
+        var t = String(s == null ? '' : s).trim();
+        var m = t.match(/^([^（）()]*?)\s*[（(]([^（）()]{1,120})[）)]$/);
+        if (!m) return null;
+        var outer = m[1].trim(), inner = m[2].trim();
+        if (!outer || !inner) return null;
+        if (isJP(outer)) return null;
+        if (!isJP(inner)) return null;
+        return inner + '（' + outer + '）';
+    }
+
+    function fillJp(text) {
+        var t = String(text == null ? '' : text).trim();
+        if (!t || isTarot(t)) return Promise.resolve(t);
+        var swapped = jpFirst(t);
+        if (swapped) return Promise.resolve(swapped);
+        if (hasPair(t)) return Promise.resolve(t);
+        return translate([t]).then(function (a) {
+            return composeJp(t, a && a[0]);
+        }).catch(function () { return t; });
+    }
+
+    var MIGRATE_KEY = 'cx_chatfmt_jp_v1';
+    /* 旧消息里「中文（日语）」的，一次性换成「日语（中文）」 */
+    function migrateChat() {
+        try {
+            if (localStorage.getItem(MIGRATE_KEY) === '1') return 0;
+            var a = (typeof messages !== 'undefined' && Array.isArray(messages)) ? messages : null;
+            if (!a || !a.length) return 0;      // 消息还没加载出来就先不算跑过
+            var n = 0;
+            a.forEach(function (m) {
+                if (!m || m.sender !== 'user' || typeof m.text !== 'string') return;
+                var v = jpFirst(m.text);
+                if (v) { m.text = v; n++; }
+            });
+            localStorage.setItem(MIGRATE_KEY, '1');
+            if (n) {
+                try { if (typeof saveData === 'function') saveData(); } catch (e) {}
+                try { if (typeof renderMessages === 'function') renderMessages(true); } catch (e) {}
+            }
+            return n;
+        } catch (e) { return 0; }
     }
 
     /* 单条：给新加的字卡现翻现拼 */
@@ -249,6 +299,29 @@
         return fixed;
     }
 
+    var CARD_MIGRATE_KEY = 'cx_cardfmt_jp_v1';
+    /* 字卡库也统一成「日语（中文原文）」：只翻面，不删不挪，分组同步改 */
+    function migrateCards() {
+        try {
+            if (localStorage.getItem(CARD_MIGRATE_KEY) === '1') return 0;
+            var list = pool();
+            if (!list || !list.length) return 0;
+            var n = 0;
+            for (var i = 0; i < list.length; i++) {
+                var old = String(list[i] == null ? '' : list[i]).trim();
+                if (!old) continue;
+                var v = jpFirst(old);
+                if (!v || v === old) continue;
+                list[i] = v;
+                syncGroups(old, v);
+                n++;
+            }
+            localStorage.setItem(CARD_MIGRATE_KEY, '1');
+            if (n) { persist(list); refreshList(); repairGroups(); }
+            return n;
+        } catch (e) { return 0; }
+    }
+
     /* 批量补齐 */
     function scan() {
         if (running) return;
@@ -313,7 +386,7 @@
     }
 
     function boot() {
-        setTimeout(function () { repairGroups(); scan(); }, 2500);   // 打开就先归组、再补翻译
+        setTimeout(function () { repairGroups(); migrateCards(); scan(); migrateChat(); }, 2500);   // 打开先归组、补翻译、顺带换聊天格式
         setInterval(function () { repairGroups(); scan(); }, 45 * 1000);
     }
 
@@ -323,5 +396,5 @@
         boot();
     }
 
-    window.CardTrans = { fill: fill, scan: scan, compose: compose, repair: repairGroups };
+    window.CardTrans = { fill: fill, fillJp: fillJp, scan: scan, compose: compose, repair: repairGroups, migrate: migrateChat, migrateCards: migrateCards };
 })();
