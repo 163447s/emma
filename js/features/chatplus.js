@@ -259,6 +259,11 @@
             if (!b) return;
             var k = b.getAttribute('data-k');
             closeReport();
+            if (k === 'no') {
+                try { if (typeof sendMessage === 'function') sendMessage('不想报备'); } catch (e) {}
+                note('不想报备，就这样回了他');
+                return;
+            }
             openReportForm(k);
         });
     }
@@ -298,11 +303,9 @@
         closeReportForm();
         var isText = kind === 'text';
         var isPhoto = kind === 'photo';
-        var title = isText ? '文字报备' : (isPhoto ? '图片报备' : '拒绝报备');
-        var tip = isText ? '写一句你现在在做什么，发给他。'
-                : (isPhoto ? '从相册选一张照片，让他看看你现在在哪。'
-                          : '说一句为什么不想报备，可以留空。');
-        var ph = isText ? '正在做什么…' : '不想报备的理由（可留空）';
+        var title = isText ? '文字报备' : '图片报备';
+        var tip = isText ? '写一句你现在在做什么，发给他。' : '从相册选一张照片，让他看看你现在在哪。';
+        var ph = '正在做什么…';
 
         reportForm = document.createElement('div');
         reportForm.className = 'cx-report-overlay';
@@ -382,8 +385,7 @@
             }
             var input = reportForm.querySelector('#cx-rep-text');
             var v = (input && input.value || '').trim();
-            if (isText && !v) { showNotification('写一句再发', 'error'); return; }
-            if (!isText && !v) v = '不想报备';
+            if (!v) { showNotification('写一句再发', 'error'); return; }
             closeReportForm();
             try {
                 if (typeof sendMessage === 'function') sendMessage(v);
