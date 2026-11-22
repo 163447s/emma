@@ -328,6 +328,44 @@
         list.appendChild(item);
     }
 
+
+    /* ── ?wp=1 直达诊断：打开网址就能看到能不能订阅 ── */
+    function webPushDiag() {
+        var box = document.createElement('div');
+        box.style.cssText = 'position:fixed;inset:0;z-index:6500;background:#101923;color:#e9f2fa;' +
+            'padding:26px 22px;font-size:14px;line-height:1.75;overflow:auto;font-family:inherit;' +
+            '-webkit-overflow-scrolling:touch;';
+        box.innerHTML = '<div style="font-size:19px;margin-bottom:14px;">浏览器推送检测</div>' +
+            '<div style="color:#9fb7c8">正在尝试开通…（系统询问通知权限时请点允许）</div>';
+        document.body.appendChild(box);
+
+        var supported = webPushSupported();
+        if (!supported) {
+            box.innerHTML = '<div style="font-size:19px;margin-bottom:14px;">浏览器推送检测</div>' +
+                '<div style="color:#ffb3b3;font-size:16px;margin-bottom:10px;">✗ 这个浏览器不支持后台推送</div>' +
+                '<div style="color:#9fb7c8">缺少 serviceWorker / PushManager / Notification 其中之一，' +
+                '换个浏览器（Chrome 或系统浏览器）再打开这个网址试试。</div>' +
+                '<div style="margin-top:18px;"><a href="./" style="color:#7fd1ff">返回站点</a></div>';
+            return;
+        }
+
+        enableWebPush().then(function (json) {
+            box.innerHTML = '<div style="font-size:19px;margin-bottom:14px;">浏览器推送检测</div>' +
+                '<div style="color:#8ff0c0;font-size:17px;margin-bottom:12px;">✓ 已登记，可以收到服务器推送</div>' +
+                '<div style="color:#9fb7c8;margin-bottom:8px;">下面这串不用发我，先留着；顺便把这条截图给我看一眼就行。</div>' +
+                '<textarea readonly style="width:100%;height:170px;font-size:11px;color:#243;background:#f4f9fd;border-radius:10px;border:none;padding:9px;">' + json + '</textarea>' +
+                '<div style="margin-top:16px;"><a href="./" style="color:#7fd1ff">返回站点</a></div>';
+        }).catch(function (e) {
+            var why = (e && (e.name || e.message)) || '未知错误';
+            box.innerHTML = '<div style="font-size:19px;margin-bottom:14px;">浏览器推送检测</div>' +
+                '<div style="color:#ffb3b3;font-size:17px;margin-bottom:12px;">✗ 订阅失败</div>' +
+                '<div style="color:#fff;font-size:15px;margin-bottom:8px;">' + why + '</div>' +
+                '<div style="color:#9fb7c8">常见原因：这台手机连不上浏览器厂商的推送服务器（国行常见）。' +
+                '可以换系统浏览器再试一次，或用微信那条通道。</div>' +
+                '<div style="margin-top:18px;"><a href="./" style="color:#7fd1ff">返回站点</a></div>';
+        });
+    }
+
     function boot() {
         injectStyle();
         startWatch();
@@ -341,6 +379,9 @@
             webpush: enableWebPush,
             sub: savedSub
         };
+        try {
+            if (/[?&]wp=1/.test(location.search)) { setTimeout(webPushDiag, 300); }
+        } catch (e) {}
         setTimeout(pullOffline, 4500);
         setTimeout(ensureEntry, 400);
         setTimeout(ensureEntry, 1500);
