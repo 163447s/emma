@@ -330,7 +330,7 @@
         return await loadBackupFromArrayBuffer(ab);
     }
 
-    async function exportBackupToFile(flags) {
+    async function exportBackupToFile(flags, opts) {
         if (typeof showNotification === 'function') showNotification('正在打包备份（ZIP：结构与媒体分离）…', 'info', 4000);
         var payload = await buildBackupPayload(flags);
         var dateStr = new Date().toISOString().slice(0, 10);
@@ -373,7 +373,7 @@
                     compression: 'DEFLATE',
                     compressionOptions: { level: 6 }
                 });
-                if (navigator.share && /Mobile|Android|iPhone|iPad/.test(navigator.userAgent)) {
+                if (!(opts && opts.noShare) && navigator.share && /Mobile|Android|iPhone|iPad/.test(navigator.userAgent)) {
                     try {
                         var shareFile = new File([zipBlob], fileNameZip, { type: 'application/zip' });
                         if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
@@ -405,7 +405,7 @@
         var str = serializeBackupV4(payload);
         var blob = new Blob([str], { type: 'application/json;charset=utf-8' });
         var fileName = 'chatapp-backup-' + dateStr + '.json';
-        if (navigator.share && /Mobile|Android|iPhone|iPad/.test(navigator.userAgent)) {
+        if (!(opts && opts.noShare) && navigator.share && /Mobile|Android|iPhone|iPad/.test(navigator.userAgent)) {
             try {
                 var f = new File([blob], fileName, { type: 'application/json' });
                 if (navigator.canShare && navigator.canShare({ files: [f] })) {
