@@ -1432,6 +1432,8 @@ const addMessage = (message) => {
     throttledSaveData();
 };
 
+        window.addMessage = addMessage;
+
         window._addCallEvent = (icon, label, detail) => {
             addMessage({
                 id: Date.now() + Math.random(),

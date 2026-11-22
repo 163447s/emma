@@ -90,6 +90,40 @@
         obs.observe(box, { childList: true, subtree: true });
     }
 
+    /* ── 他不在页面时说的话：打开站点时补进聊天 ── */
+    function pullOffline() {
+        var SEEN = 'cx_offline_seen';
+        var seen = null;
+        try { seen = localStorage.getItem(SEEN); } catch (e) {}
+        fetch('data/offline-messages.json?t=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (list) {
+                if (!Array.isArray(list) || !list.length) return;
+                var latest = list[list.length - 1].id || 0;
+                if (seen === null) {                      // 第一次不补历史，免得一进来刷屏
+                    try { localStorage.setItem(SEEN, String(latest)); } catch (e) {}
+                    return;
+                }
+                var last = parseInt(seen, 10) || 0;
+                var fresh = list.filter(function (m) { return (m.id || 0) > last; }).slice(-6);
+                if (!fresh.length) return;
+                fresh.forEach(function (m, i) {
+                    setTimeout(function () {
+                        try {
+                            if (window.addMessage) {
+                                window.addMessage({
+                                    id: m.id, sender: partnerName(), text: m.text, type: 'normal',
+                                    timestamp: new Date(m.ts || m.id), status: 'received'
+                                });
+                            }
+                        } catch (e) {}
+                        try { localStorage.setItem(SEEN, String(m.id)); } catch (e) {}
+                    }, 1600 + i * 2200);
+                });
+            })
+            .catch(function () {});
+    }
+
     /* ── 设置面板 ── */
     var STYLE_ID = 'cx-push-style';
     function injectStyle() {
@@ -233,6 +267,7 @@
             token: getToken,
             on: isOn
         };
+        setTimeout(pullOffline, 4500);
         setTimeout(ensureEntry, 400);
         setTimeout(ensureEntry, 1500);
         setTimeout(ensureEntry, 3500);
