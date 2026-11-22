@@ -259,18 +259,136 @@
             if (!b) return;
             var k = b.getAttribute('data-k');
             closeReport();
-            addPartnerMessage('查岗');
-            if (k === 'photo') { ensureCamInput().click(); return; }   // 必须在点击手势里唤起相机
-            setTimeout(function () {
-                if (k === 'text') {
-                    var i = document.getElementById('message-input');
-                    if (i) { i.focus(); }
-                } else if (k === 'photo') {
-                    ensureCamInput().click();
-                } else {
-                    try { if (typeof sendMessage === 'function') sendMessage('不想报备'); } catch (er) {}
+            openReportForm(k);
+        });
+    }
+
+
+    /* 选完报备方式之后，顺势弹一个对应的填写框 */
+    var reportForm = null;
+
+    function closeReportForm() {
+        if (reportForm && reportForm.parentNode) reportForm.parentNode.removeChild(reportForm);
+        reportForm = null;
+        var tmp = document.getElementById('cx-rep-file');
+        if (tmp && tmp.parentNode) tmp.parentNode.removeChild(tmp);
+    }
+
+    function ensureFormStyle() {
+        if (document.getElementById('cx-rep-form-style')) return;
+        var st = document.createElement('style');
+        st.id = 'cx-rep-form-style';
+        st.textContent = [
+            '.cx-report-form{text-align:left}',
+            '.cx-form-tip{font-size:12px;color:#7b93a8;line-height:1.6;margin:2px 0 8px}',
+            '#cx-rep-text{width:100%;min-height:84px;box-sizing:border-box;border:1px solid rgba(140,170,195,.35);',
+            'border-radius:12px;padding:10px 12px;font-size:13px;color:#324a60;background:#fff;outline:none;',
+            'font-family:inherit;resize:none;line-height:1.6}',
+            '#cx-rep-text:focus{border-color:rgba(90,150,200,.65)}',
+            '.cx-form-actions{display:flex;gap:10px;margin-top:10px}',
+            '.cx-form-actions .cx-rep-btn{flex:1;margin-top:0}',
+            '.cx-rep-preview{text-align:center;margin:6px 0 2px;display:none}',
+            '.cx-rep-preview img{max-width:100%;max-height:170px;border-radius:12px;border:1px solid rgba(140,170,195,.3)}'
+        ].join('');
+        document.head.appendChild(st);
+    }
+
+    function openReportForm(kind) {
+        ensureFormStyle();
+        closeReportForm();
+        var isText = kind === 'text';
+        var isPhoto = kind === 'photo';
+        var title = isText ? '文字报备' : (isPhoto ? '图片报备' : '拒绝报备');
+        var tip = isText ? '写一句你现在在做什么，发给他。'
+                : (isPhoto ? '从相册选一张照片，让他看看你现在在哪。'
+                          : '说一句为什么不想报备，可以留空。');
+        var ph = isText ? '正在做什么…' : '不想报备的理由（可留空）';
+
+        reportForm = document.createElement('div');
+        reportForm.className = 'cx-report-overlay';
+        reportForm.innerHTML = [
+            '<div class="cx-report-card cx-report-form">',
+            '  <div class="cx-report-title">' + title + '</div>',
+            '  <div class="cx-form-tip">' + tip + '</div>',
+            isPhoto
+                ? '  <button class="cx-rep-btn" id="cx-rep-pick">从相册选一张</button>' +
+                  '  <div class="cx-rep-preview" id="cx-rep-preview"><img alt=""></div>'
+                : '  <textarea id="cx-rep-text" placeholder="' + ph + '"></textarea>',
+            '  <div class="cx-form-actions">',
+            '    <button class="cx-rep-btn" id="cx-rep-cancel" style="background:rgba(120,150,175,.16);color:#56718a;">取消</button>',
+            '    <button class="cx-rep-btn" id="cx-rep-send">发送</button>',
+            '  </div>',
+            '</div>'
+        ].join('');
+        document.body.appendChild(reportForm);
+
+        reportForm.addEventListener('click', function (e) {
+            if (e.target === reportForm) closeReportForm();
+        });
+        reportForm.querySelector('#cx-rep-cancel').addEventListener('click', closeReportForm);
+
+        var picked = null;
+        var fileInput = null;
+
+        if (isPhoto) {
+            fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/*';
+            fileInput.id = 'cx-rep-file';
+            fileInput.style.display = 'none';
+            fileInput.addEventListener('change', function () {
+                var f = fileInput.files && fileInput.files[0];
+                fileInput.value = '';
+                if (!f) return;
+                if (f.size > 30 * 1024 * 1024) {
+                    showNotification('图片太大了（超过30MB）', 'error');
+                    return;
                 }
-            }, 350);
+                showNotification('正在优化图片…', 'info', 1300);
+                optimizeImage(f, 1080, 0.82).then(function (data) {
+                    if (!data) throw new Error('empty');
+                    picked = data;
+                    var pv = reportForm.querySelector('#cx-rep-preview');
+                    pv.style.display = 'block';
+                    pv.querySelector('img').src = data;
+                }).catch(function () {
+                    showNotification('图片处理失败，换一张试试', 'error');
+                });
+            });
+            document.body.appendChild(fileInput);
+            reportForm.querySelector('#cx-rep-pick').addEventListener('click', function () {
+                fileInput.click();
+            });
+            setTimeout(function () { try { fileInput.click(); } catch (e) {} }, 120);
+        } else {
+            var ta = reportForm.querySelector('#cx-rep-text');
+            setTimeout(function () { try { ta.focus(); } catch (e) {} }, 160);
+        }
+
+        reportForm.querySelector('#cx-rep-send').addEventListener('click', function () {
+            if (isPhoto) {
+                if (!picked) { showNotification('先选一张照片', 'error'); return; }
+                closeReportForm();
+                try {
+                    addMessage({
+                        id: Date.now(), sender: 'user', text: '', timestamp: new Date(),
+                        image: picked, status: 'sent', favorited: false, note: null, replyTo: null, type: 'normal'
+                    });
+                    if (typeof playSound === 'function') playSound('send');
+                } catch (e) {}
+                try { if (window.simulateReply) setTimeout(window.simulateReply, 1200 + Math.random() * 1200); } catch (e) {}
+                showNotification('✓ 照片已发送', 'success', 1500);
+                return;
+            }
+            var input = reportForm.querySelector('#cx-rep-text');
+            var v = (input && input.value || '').trim();
+            if (isText && !v) { showNotification('写一句再发', 'error'); return; }
+            if (!isText && !v) v = '不想报备';
+            closeReportForm();
+            try {
+                if (typeof sendMessage === 'function') sendMessage(v);
+                else addMessage({ id: Date.now(), sender: 'user', text: v, timestamp: new Date(), status: 'sent', type: 'normal' });
+            } catch (e) {}
         });
     }
 
