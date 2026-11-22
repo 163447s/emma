@@ -62,7 +62,10 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 
 #cx-home {
   position: fixed; inset: 0; z-index: 1000;
-  background: radial-gradient(120% 80% at 50% 0%, #fff9f2 0%, #fbf7f2 58%, #f6efe6 100%);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.3) 45%, rgba(255,255,255,0.42) 100%),
+    url('images/cx-home-bg.jpg') 50% 0% / cover no-repeat,
+    #f1f7fd;
   display: flex; align-items: center; justify-content: center;
   padding: max(22px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
   overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -227,7 +230,8 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 
   function showHome(keepMode) {
     if (!homeEl) build();
-    paintHomeBg();
+    /* 暂时不跟聊天背景同步，保持自己的水彩底 */
+    try { homeEl.style.background = ''; homeEl.style.backgroundImage = ''; homeEl.style.backgroundColor = ''; homeEl.style.backgroundSize = ''; homeEl.style.backgroundPosition = ''; homeEl.style.backgroundRepeat = ''; } catch (e) {}
     if (!keepMode) mode = 'home';
     homeEl.classList.remove('cx-hide');
     fabEl.classList.remove('cx-on');
