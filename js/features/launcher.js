@@ -199,8 +199,35 @@ ${MOVED.map(id => '#' + id).join(',\n')} { display: none !important; }
 
   /* ── 显示 / 隐藏 ── */
 
+  /* 功能主页背景跟聊天页用同一张（读 --chat-bg-image） */
+  function paintHomeBg() {
+    try {
+      if (!homeEl) return;
+      var raw = (getComputedStyle(document.documentElement).getPropertyValue('--chat-bg-image') || '').trim();
+      if (!raw) {
+        try {
+          var k = (typeof getStorageKey === 'function') ? getStorageKey('chatBackground') : '';
+          raw = String((k && localStorage.getItem(k)) || '').trim();
+        } catch (e) {}
+      }
+      if (!raw) return;                        // 没设背景就保留原来的米色
+      if (/^url\(/i.test(raw) || /^https?:|^data:/i.test(raw)) {
+        var u = (/^url\(/i.test(raw)) ? raw : 'url("' + raw + '")';
+        homeEl.style.background = '';
+        homeEl.style.backgroundImage = u;
+        homeEl.style.backgroundSize = 'cover';
+        homeEl.style.backgroundPosition = 'center';
+        homeEl.style.backgroundRepeat = 'no-repeat';
+        homeEl.style.backgroundColor = '#f7f3ec';
+      } else {
+        homeEl.style.background = raw;
+      }
+    } catch (e) {}
+  }
+
   function showHome(keepMode) {
     if (!homeEl) build();
+    paintHomeBg();
     if (!keepMode) mode = 'home';
     homeEl.classList.remove('cx-hide');
     fabEl.classList.remove('cx-on');

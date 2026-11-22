@@ -3,7 +3,7 @@
  * 并更新 index.html 中 js 文件的 ?v= 参数，用户才会加载到新版本。
  * v3：图标 URL 加版本参数（?v=2），强制刷新已安装的图标缓存。
  */
-const CACHE_NAME = 'milk-emma-v42';
+const CACHE_NAME = 'milk-emma-v43';
 
 /* 核心资源（同源，首次访问时预缓存） */
 const CORE_ASSETS = [
@@ -31,7 +31,7 @@ const CORE_ASSETS = [
   './js/onboarding.js',
   './js/listeners.js',
   './js/app.js',
-  './js/features/launcher.js?v=20261119a',
+  './js/features/launcher.js?v=20261122a',
   './js/features/channeling.js?v=20261122b',
   './js/features/chatplus.js?v=20261122b',
   './js/features/cardtrans.js?v=20261122c',
