@@ -41,10 +41,6 @@ def main():
         return
 
     cfg = load(CONFIG, {})
-    uid = (cfg.get('uid') or '').strip()
-    if not uid:
-        print('push-config.json 里没有 uid，跳过')
-        return
 
     cards = load(CARDS, [])
     if not isinstance(cards, list) or not cards:
@@ -76,18 +72,17 @@ def main():
     name = cfg.get('name') or '他'
 
     payload = json.dumps({
-        'appToken': token,
+        'token': token,
+        'title': name,
         'content': text,
-        'summary': name,
-        'contentType': 1,
-        'uids': [uid],
+        'template': 'txt',
     }, ensure_ascii=False).encode('utf-8')
     req = urllib.request.Request(API, data=payload, headers={'Content-Type': 'application/json'})
     try:
         body = urllib.request.urlopen(req, timeout=20).read().decode('utf-8', 'ignore')
         print('推送结果：', body[:200])
         res = json.loads(body)
-        if not res.get('success'):
+        if res.get('code') != 200:
             print('推送未成功，不写离线记录')
             return
     except Exception as e:
