@@ -73,7 +73,7 @@ def main():
 
     payload = json.dumps({
         'token': token,
-        'title': name,
+        'title': text[:100],
         'content': text,
         'template': 'txt',
     }, ensure_ascii=False).encode('utf-8')
