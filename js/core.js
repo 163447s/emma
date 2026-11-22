@@ -1663,16 +1663,6 @@ if (!isBatchMode && type === 'normal') {
             if (imageFile) {
                 showNotification('正在优化图片...', 'info', 1500);
                 optimizeImage(imageFile).then(createMessage).catch(() => showNotification('图片处理失败', 'error'));
-            } else if (type === 'normal' && !textOverride && text && !isBatchMode) {
-                // 统一格式：气泡显示「日语译文（中文原文）」；翻不出来就原样发
-                const _fillText = (window.CardTrans && typeof window.CardTrans.fillJp === 'function')
-                    ? window.CardTrans.fillJp(text)
-                    : Promise.resolve(text);
-                _fillText.then(t => {
-                    const full = (t && String(t).trim()) ? String(t).trim() : text;
-                    if (full !== text) { _sendText = full; _originalText = text; }
-                    createMessage();
-                }).catch(() => { createMessage(); });
             } else {
                 createMessage();
             }
