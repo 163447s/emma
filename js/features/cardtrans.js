@@ -168,20 +168,17 @@
         }).catch(function () { return t; });
     }
 
-    var MIGRATE_KEY = 'cx_chatfmt_jp_v1';
-    /* 旧消息里「中文（日语）」的，一次性换成「日语（中文）」 */
+    /* 旧消息里「中文（日语）」的，换成「日语（中文）」。幂等，每轮都能再查一遍。 */
     function migrateChat() {
         try {
-            if (localStorage.getItem(MIGRATE_KEY) === '1') return 0;
             var a = (typeof messages !== 'undefined' && Array.isArray(messages)) ? messages : null;
-            if (!a || !a.length) return 0;      // 消息还没加载出来就先不算跑过
+            if (!a || !a.length) return 0;
             var n = 0;
             a.forEach(function (m) {
                 if (!m || m.sender !== 'user' || typeof m.text !== 'string') return;
                 var v = jpFirst(m.text);
                 if (v) { m.text = v; n++; }
             });
-            localStorage.setItem(MIGRATE_KEY, '1');
             if (n) {
                 try { if (typeof saveData === 'function') saveData(); } catch (e) {}
                 try { if (typeof renderMessages === 'function') renderMessages(true); } catch (e) {}
@@ -299,11 +296,10 @@
         return fixed;
     }
 
-    var CARD_MIGRATE_KEY = 'cx_cardfmt_jp_v1';
-    /* 字卡库也统一成「日语（中文原文）」：只翻面，不删不挪，分组同步改 */
+    /* 字卡库统一成「日语（中文原文）」：只翻面，不删不挪，分组同步改。
+       幂等 + 不设一次性开关 —— 卡库加载晚、或之后又进了旧格式的卡，都能再翻一次。 */
     function migrateCards() {
         try {
-            if (localStorage.getItem(CARD_MIGRATE_KEY) === '1') return 0;
             var list = pool();
             if (!list || !list.length) return 0;
             var n = 0;
@@ -316,8 +312,12 @@
                 syncGroups(old, v);
                 n++;
             }
-            localStorage.setItem(CARD_MIGRATE_KEY, '1');
-            if (n) { persist(list); refreshList(); repairGroups(); }
+            if (n) {
+                persist(list); refreshList(); repairGroups();
+                try {
+                    if (typeof showNotification === 'function') showNotification('✓ 已把 ' + n + ' 条字卡改成「日语（中文）」', 'success', 3000);
+                } catch (e) {}
+            }
             return n;
         } catch (e) { return 0; }
     }
@@ -386,8 +386,8 @@
     }
 
     function boot() {
-        setTimeout(function () { repairGroups(); migrateCards(); scan(); migrateChat(); }, 2500);   // 打开先归组、补翻译、顺带换聊天格式
-        setInterval(function () { repairGroups(); scan(); }, 45 * 1000);
+        setTimeout(function () { repairGroups(); migrateCards(); scan(); migrateChat(); }, 2500);   // 打开先归组、换格式、补翻译
+        setInterval(function () { repairGroups(); migrateCards(); scan(); migrateChat(); }, 45 * 1000);
     }
 
     if (document.readyState === 'loading') {
