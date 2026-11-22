@@ -665,8 +665,8 @@ function showPokeTab() {
                 fileInput.addEventListener('change', function(e) {
                     const file = e.target.files[0];
                     if (file) {
-                        if (file.size > MAX_IMAGE_SIZE) {
-                            showNotification('图片大小不能超过5MB', 'error');
+                        if (file.size > 30 * 1024 * 1024) {
+                            showNotification('图片太大了（超过30MB）', 'error');
                             return;
                         }
                         showNotification('正在优化图片...', 'info', 1500);

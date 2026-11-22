@@ -3,7 +3,7 @@
  * 并更新 index.html 中 js 文件的 ?v= 参数，用户才会加载到新版本。
  * v3：图标 URL 加版本参数（?v=2），强制刷新已安装的图标缓存。
  */
-const CACHE_NAME = 'milk-emma-v43';
+const CACHE_NAME = 'milk-emma-v45';
 
 /* 核心资源（同源，首次访问时预缓存） */
 const CORE_ASSETS = [
@@ -17,7 +17,7 @@ const CORE_ASSETS = [
   './js/state.js',
   './js/translation.js?v=20261122a',
   './js/tarot.js?v=20261102d',
-  './js/core.js?v=20261122b',
+  './js/core.js?v=20261122c',
   './js/features/mood.js',
   './js/features/envelope.js',
   './js/features/reply-library.js',
@@ -26,14 +26,14 @@ const CORE_ASSETS = [
   './js/features/call.js',
   './js/features/qa.js',
   './js/games.js',
-  './js/features.js',
+  './js/features.js?v=20261122a',
   './js/data.js',
   './js/onboarding.js',
-  './js/listeners.js',
+  './js/listeners.js?v=20261122a',
   './js/app.js',
   './js/features/launcher.js?v=20261122a',
   './js/features/channeling.js?v=20261122b',
-  './js/features/chatplus.js?v=20261122b',
+  './js/features/chatplus.js?v=20261122d',
   './js/features/cardtrans.js?v=20261122c',
   './js/features/moments.js?v=20261122a',
   './icons/icon-192.png?v=2',

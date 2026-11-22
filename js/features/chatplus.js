@@ -260,13 +260,13 @@
             var k = b.getAttribute('data-k');
             closeReport();
             addPartnerMessage('查岗');
+            if (k === 'photo') { ensureCamInput().click(); return; }   // 必须在点击手势里唤起相机
             setTimeout(function () {
                 if (k === 'text') {
                     var i = document.getElementById('message-input');
                     if (i) { i.focus(); }
                 } else if (k === 'photo') {
-                    var a = document.getElementById('attachment-btn');
-                    if (a) a.click();
+                    ensureCamInput().click();
                 } else {
                     try { if (typeof sendMessage === 'function') sendMessage('不想报备'); } catch (er) {}
                 }
@@ -367,10 +367,124 @@
         setTimeout(boot, 900);
     }
 
+    /* ═══════════════ 四、拍照发图 ═══════════════ */
+    var camInput = null;
+
+    function ensureCamInput() {
+        if (camInput && camInput.parentNode) return camInput;
+        camInput = document.createElement('input');
+        camInput.type = 'file';
+        camInput.id = 'camera-input';
+        camInput.className = 'file-input';
+        camInput.accept = 'image/*';
+        camInput.setAttribute('capture', 'environment');
+        camInput.style.display = 'none';
+        camInput.addEventListener('change', onCamShot);
+        document.body.appendChild(camInput);
+        return camInput;
+    }
+
+    /* 手机原相机拍出来的图很大，这里统一缩到 1080 宽再转 JPEG */
+    function shrinkPhoto(file, maxW, quality) {
+        return new Promise(function (resolve, reject) {
+            var url = URL.createObjectURL(file);
+            var img = new Image();
+            img.onload = function () {
+                try {
+                    var w = img.naturalWidth || img.width || 0;
+                    var h = img.naturalHeight || img.height || 0;
+                    if (!w || !h) throw new Error('no-size');
+                    var scale = w > maxW ? maxW / w : 1;
+                    var cw = Math.round(w * scale);
+                    var ch = Math.round(h * scale);
+                    var c = document.createElement('canvas');
+                    c.width = cw; c.height = ch;
+                    c.getContext('2d').drawImage(img, 0, 0, cw, ch);
+                    URL.revokeObjectURL(url);
+                    resolve(c.toDataURL('image/jpeg', quality || 0.82));
+                } catch (e) { URL.revokeObjectURL(url); reject(e); }
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode')); };
+            img.src = url;
+        });
+    }
+
+    function onCamShot() {
+        var f = camInput && camInput.files && camInput.files[0];
+        if (camInput) camInput.value = '';
+        if (!f) return;
+        showNotification('正在处理照片…', 'info', 1400);
+        shrinkPhoto(f, 1080, 0.82).then(function (data) {
+            if (!data) throw new Error('empty');
+            addMessage({
+                id: Date.now(), sender: 'user', text: '', timestamp: new Date(),
+                image: data, status: 'sent', favorited: false, note: null, replyTo: null, type: 'normal'
+            });
+            try { if (typeof playSound === 'function') playSound('send'); } catch (e) {}
+            try { if (window.simulateReply) setTimeout(window.simulateReply, 1500 + Math.random() * 1500); } catch (e) {}
+            showNotification('✓ 照片已发送', 'success', 1600);
+        }).catch(function () {
+            showNotification('照片处理失败，换一张试试', 'error', 2000);
+        });
+    }
+
+    /* 在「发送图片」弹窗里补一个「拍照」按钮 */
+    function injectCamButton() {
+        var modals = document.querySelectorAll('.image-upload-modal');
+        for (var i = 0; i < modals.length; i++) {
+            (function (mm) {
+                if (!mm || !mm.parentNode) return;
+                if (mm.querySelector('#cx-camera-btn')) return;
+                var fileInput = mm.querySelector('#image-file-input');
+                if (!fileInput || !fileInput.parentNode) return;
+                var row = document.createElement('div');
+                row.style.cssText = 'margin-bottom:10px;';
+                row.innerHTML = '<button class="modal-btn modal-btn-secondary" id="cx-camera-btn" style="width:100%;">📷 拍照</button>';
+                fileInput.parentNode.insertBefore(row, fileInput);
+                var btn = row.querySelector('#cx-camera-btn');
+                btn.addEventListener('click', function () {
+                    try {
+                        mm.style.opacity = '0';
+                        setTimeout(function () { if (mm.parentNode) mm.parentNode.removeChild(mm); }, 180);
+                    } catch (e) {}
+                    setTimeout(function () { ensureCamInput().click(); }, 200);
+                });
+            })(modals[i]);
+        }
+    }
+
+    function watchUploadModal() {
+        try {
+            var mo = new MutationObserver(function (muts) {
+                var hit = false;
+                muts.forEach(function (mu) {
+                    Array.prototype.forEach.call(mu.addedNodes || [], function (nd) {
+                        if (nd && nd.nodeType === 1 && nd.classList && nd.classList.contains('image-upload-modal')) hit = true;
+                    });
+                });
+                if (hit) setTimeout(injectCamButton, 40);
+            });
+            mo.observe(document.body, { childList: true, subtree: true });
+        } catch (e) {}
+        /* 双保险：点了图片按钮之后再补一次 */
+        try {
+            document.addEventListener('click', function (e) {
+                var t = e.target && e.target.closest ? e.target.closest('#attachment-btn, #attachment-btn-extra') : null;
+                if (!t) return;
+                setTimeout(injectCamButton, 60);
+                setTimeout(injectCamButton, 260);
+            }, true);
+        } catch (e) {}
+    }
+
+    ensureCamInput();
+    watchUploadModal();
+
     window.ChatPlus = {
         steal: autoSteal,
         report: openReport,
         pick: cardPick,
-        file: fileIntoStealGroup
+        file: fileIntoStealGroup,
+        camera: function () { ensureCamInput().click(); }
     };
 })();

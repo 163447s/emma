@@ -1587,8 +1587,8 @@ const addMessage = (message) => {
 
             DOMElements.messageInput.value = '';
             DOMElements.messageInput.style.height = '46px';
-            if (imageFile && imageFile.size > MAX_IMAGE_SIZE) {
-                showNotification('图片大小不能超过5MB', 'error'); DOMElements.imageInput.value = ''; return;
+            if (imageFile && imageFile.size > 30 * 1024 * 1024) {
+                showNotification('图片太大了（超过30MB）', 'error'); DOMElements.imageInput.value = ''; return;
             }
 
             const createMessage = (imgSrc = null) => {
