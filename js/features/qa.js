@@ -18,6 +18,8 @@
 
     let qaModal = null;
     let qaCurrent = null; // 当前展示的记录 { question, options, chosen, card, time }
+    let qaPendingPhoto = null; // 本次要随问题一起发出去的图（压缩后的 dataURL）
+    let qaPhotoBusy = false;
 
     /* ── 小工具 ─────────────────────────────────────── */
     function esc(s) {
@@ -41,10 +43,25 @@
     }
 
     function writeHistory(arr) {
-        try {
-            localStorage.setItem(QA_STORAGE_KEY, JSON.stringify(arr.slice(0, QA_MAX_RECORDS)));
-        } catch (e) {
-            console.warn('[QA] 保存历史失败:', e);
+        let list = arr.slice(0, QA_MAX_RECORDS);
+        for (let attempt = 0; attempt < 60; attempt++) {
+            try {
+                localStorage.setItem(QA_STORAGE_KEY, JSON.stringify(list));
+                return;
+            } catch (e) {
+                // 存不下了：从最旧的几条开始把图丢掉，文字记录保留
+                let dropped = 0;
+                for (let i = list.length - 1; i >= 0 && dropped < 5; i--) {
+                    if (list[i] && list[i].photo) {
+                        list[i] = Object.assign({}, list[i], { photo: null });
+                        dropped++;
+                    }
+                }
+                if (!dropped) {
+                    console.warn('[QA] 保存历史失败:', e);
+                    return;
+                }
+            }
         }
     }
 
@@ -92,6 +109,37 @@
         }
         if (pool.length === 0) pool = ['他轻轻笑了笑 ✦'];
         return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    /* 把相片压成一张不大的 jpeg：最长边 720、控制在 160KB 以内 */
+    function shrinkPhoto(file, maxSide, maxChars) {
+        return new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onerror = () => reject(new Error('读取图片失败'));
+            fr.onload = () => {
+                const img = new Image();
+                img.onerror = () => reject(new Error('图片解析失败'));
+                img.onload = () => {
+                    let w = img.naturalWidth || img.width;
+                    let h = img.naturalHeight || img.height;
+                    const m = Math.max(w, h);
+                    if (m > maxSide) { const r = maxSide / m; w = Math.round(w * r); h = Math.round(h * r); }
+                    const cv = document.createElement('canvas');
+                    cv.width = w; cv.height = h;
+                    const ctx = cv.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    let q = 0.62;
+                    let out = cv.toDataURL('image/jpeg', q);
+                    while (out.length > maxChars && q > 0.3) {
+                        q -= 0.08;
+                        out = cv.toDataURL('image/jpeg', q);
+                    }
+                    resolve(out);
+                };
+                img.src = fr.result;
+            };
+            fr.readAsDataURL(file);
+        });
     }
 
     // 字卡支持「主文字|副文字」格式（与回复库一致）
@@ -316,6 +364,42 @@
                 color: #ef4444;
             }
             #qa-modal .qa-clear-btn:hover { background: rgba(239, 68, 68, 0.18); }
+            #qa-modal .qa-photo-row { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+            #qa-modal .qa-add-photo {
+                display: inline-flex; align-items: center; gap: 6px;
+                padding: 8px 14px;
+                border: 1.5px dashed var(--border-color);
+                border-radius: 20px;
+                background: var(--primary-bg);
+                color: var(--text-secondary);
+                font-size: 12.5px; cursor: pointer; font-family: var(--font-family);
+                transition: all 0.18s;
+            }
+            #qa-modal .qa-add-photo:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            #qa-modal .qa-add-photo.busy { opacity: 0.6; pointer-events: none; }
+            #qa-modal .qa-photo-preview { position: relative; display: none; }
+            #qa-modal .qa-photo-preview img {
+                width: 62px; height: 62px; object-fit: cover;
+                border-radius: 12px; border: 1.5px solid var(--border-color); display: block;
+            }
+            #qa-modal .qa-photo-del {
+                position: absolute; top: -6px; right: -6px;
+                width: 20px; height: 20px; border-radius: 50%;
+                border: none; background: rgba(239, 68, 68, 0.9); color: #fff;
+                font-size: 11px; line-height: 1; cursor: pointer;
+                display: flex; align-items: center; justify-content: center;
+            }
+            #qa-modal .qa-result-photo { margin-top: 10px; display: none; text-align: center; }
+            #qa-modal .qa-result-photo img {
+                max-width: 100%; max-height: 260px;
+                border-radius: 14px; border: 1.5px solid var(--border-color);
+                box-shadow: 0 8px 22px rgba(0,0,0,0.12);
+            }
+            #qa-modal .qa-hi-photo img {
+                width: 44px; height: 44px; object-fit: cover;
+                border-radius: 8px; border: 1px solid var(--border-color);
+                vertical-align: middle; margin-right: 8px;
+            }
         `;
         (document.head || document.documentElement).appendChild(s);
     })();
@@ -342,6 +426,14 @@
                 <div id="qa-view-setup" class="qa-view">
                     <div class="qa-field-label"><i class="fas fa-pen"></i> 你的问题</div>
                     <input type="text" id="qa-question-input" class="qa-input" placeholder="你想问他什么？" maxlength="200" autocomplete="off">
+                    <div class="qa-photo-row">
+                        <button type="button" class="qa-add-photo" id="qa-add-photo"><i class="fas fa-image"></i> 加一张图（可选）</button>
+                        <div class="qa-photo-preview" id="qa-photo-preview">
+                            <img id="qa-photo-img" alt="待发送的图">
+                            <button type="button" class="qa-photo-del" id="qa-photo-del" title="移除这张图"><i class="fas fa-times"></i></button>
+                        </div>
+                        <input type="file" id="qa-photo-input" accept="image/*" hidden>
+                    </div>
                     <div class="qa-field-label"><i class="fas fa-list-ul"></i> 选项</div>
                     <textarea id="qa-options-input" class="qa-input qa-textarea" placeholder="每行一个选项，至少2个" rows="4"></textarea>
                     <div class="qa-hint">✧ 他会从你给出的选项里随机替你选一个，并回你一张字卡</div>
@@ -355,6 +447,7 @@
                     <div class="qa-result-head">
                         <div class="qa-result-kicker">你 问 他</div>
                         <div class="qa-result-question" id="qa-result-question"></div>
+                        <div class="qa-result-photo" id="qa-result-photo"><img id="qa-result-photo-img" alt="你发的图"></div>
                     </div>
                     <div class="qa-options-grid" id="qa-result-options"></div>
                     <div class="qa-card-area">
@@ -404,6 +497,18 @@
         const cardEl = document.getElementById('qa-result-card');
 
         if (qEl) qEl.textContent = record.question;
+
+        const phEl = document.getElementById('qa-result-photo');
+        const phImg = document.getElementById('qa-result-photo-img');
+        if (phEl && phImg) {
+            if (record.photo) {
+                phImg.src = record.photo;
+                phEl.style.display = 'block';
+            } else {
+                phImg.removeAttribute('src');
+                phEl.style.display = 'none';
+            }
+        }
 
         if (optsEl) {
             optsEl.innerHTML = record.options.map((opt) => {
@@ -464,7 +569,7 @@
                     <span class="qa-hi-time">${t}</span>
                     <span class="qa-hi-chosen">他选了：${esc(r.chosen)}</span>
                 </div>
-                <div class="qa-hi-question">${esc(r.question)}</div>
+                <div class="qa-hi-question">${r.photo ? `<span class="qa-hi-photo"><img src="${r.photo}" alt=""></span>` : ''}${esc(r.question)}</div>
                 <div class="qa-hi-card">${esc(cardTxt.main)}${cardTxt.sub ? ' · ' + esc(cardTxt.sub) : ''}</div>
             </div>`;
         }).join('');
@@ -501,7 +606,7 @@
 
         const chosen = options[Math.floor(Math.random() * options.length)];
         const card = drawRandomCard();
-        const record = { question, options, chosen, card, time: Date.now() };
+        const record = { question, options, chosen, card, photo: qaPendingPhoto || null, time: Date.now() };
         qaCurrent = record;
         addHistoryRecord(record);
         renderResult(record);
@@ -517,6 +622,7 @@
             options: qaCurrent.options.slice(),
             chosen,
             card,
+            photo: qaCurrent.photo || null,
             time: Date.now()
         };
         qaCurrent = record;
@@ -530,6 +636,11 @@
         const ta = document.getElementById('qa-options-input');
         if (q) q.value = '';
         if (ta) ta.value = '';
+        qaPendingPhoto = null;
+        const pv = document.getElementById('qa-photo-preview');
+        if (pv) pv.style.display = 'none';
+        const pi = document.getElementById('qa-photo-img');
+        if (pi) pi.removeAttribute('src');
         showView('setup');
         showModal(qaModal);
         setTimeout(() => { if (q) q.focus(); }, 120);
@@ -558,6 +669,52 @@
         if (!qaModal) return;
         if (qaModal.dataset.qaBound) return;
         qaModal.dataset.qaBound = 'true';
+
+        // 选图 / 移除图 / 看大图
+        const photoBtn = document.getElementById('qa-add-photo');
+        const photoInput = document.getElementById('qa-photo-input');
+        const photoPreview = document.getElementById('qa-photo-preview');
+        const photoImg = document.getElementById('qa-photo-img');
+        const photoDel = document.getElementById('qa-photo-del');
+
+        if (photoBtn && photoInput) {
+            photoBtn.addEventListener('click', () => { if (!qaPhotoBusy) photoInput.click(); });
+            photoInput.addEventListener('change', async (e) => {
+                const file = e.target.files && e.target.files[0];
+                e.target.value = '';
+                if (!file) return;
+                if (!/^image\//.test(file.type || '')) {
+                    if (typeof showNotification === 'function') showNotification('只支持图片文件', 'warning');
+                    return;
+                }
+                qaPhotoBusy = true;
+                photoBtn.classList.add('busy');
+                photoBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中…';
+                try {
+                    const dataUrl = await shrinkPhoto(file, 720, 160000);
+                    qaPendingPhoto = dataUrl;
+                    if (photoImg) photoImg.src = dataUrl;
+                    if (photoPreview) photoPreview.style.display = 'block';
+                } catch (err) {
+                    console.warn('[QA] 图片处理失败:', err);
+                    if (typeof showNotification === 'function') showNotification('这张图没处理成功，换一张试试', 'error');
+                } finally {
+                    qaPhotoBusy = false;
+                    photoBtn.classList.remove('busy');
+                    photoBtn.innerHTML = '<i class="fas fa-image"></i> 加一张图（可选）';
+                }
+            });
+        }
+        if (photoDel) {
+            photoDel.addEventListener('click', () => {
+                qaPendingPhoto = null;
+                if (photoImg) photoImg.removeAttribute('src');
+                if (photoPreview) photoPreview.style.display = 'none';
+            });
+        }
+        if (photoImg) {
+            photoImg.addEventListener('click', () => { if (qaPendingPhoto) window.open(qaPendingPhoto, '_blank'); });
+        }
 
         const submitBtn = document.getElementById('qa-submit-btn');
         if (submitBtn) submitBtn.addEventListener('click', handleSubmit);
