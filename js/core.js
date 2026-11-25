@@ -1824,6 +1824,7 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                      if (nextPersona.avatar) {
                          updateAvatar(DOMElements.partner.avatar, nextPersona.avatar);
                          localforage.setItem(getStorageKey('partnerAvatar'), nextPersona.avatar);
+                         try { if (typeof renderMessages === 'function') renderMessages(true); } catch (e) {}
                      }
                      throttledSaveData();
                 }
