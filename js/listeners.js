@@ -360,7 +360,11 @@ fileInput.addEventListener('change', function(e) {
                 saveBtn.addEventListener('click',
                     () => {
                         if (currentAvatarData) {
-                            updateAvatar(isPartner ? DOMElements.partner.avatar: DOMElements.me.avatar, currentAvatarData);
+                            const targetEl = isPartner ? DOMElements.partner.avatar : DOMElements.me.avatar;
+                            if (targetEl) targetEl.innerHTML = `<img src="${currentAvatarData}" alt="avatar">`;
+                            // 记下来，别让之后的重绘/刷新又用回旧的
+                            window._avatarOverride = window._avatarOverride || {};
+                            window._avatarOverride[isPartner ? 'partner' : 'me'] = currentAvatarData;
                             throttledSaveData();
                             // 历史消息里的头像也一起换成新的
                             try {
