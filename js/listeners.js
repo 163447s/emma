@@ -174,7 +174,7 @@ if (target.classList.contains('delete-btn')) {
                     pokeText = window._sanitizePokeTextForDisplay(pokeText);
                 }
                 const pokeSaveChecked = document.getElementById('poke-save-to-library');
-                const shouldSaveToLibrary = pokeSaveChecked ? !!pokeSaveChecked.checked : false;
+                const shouldSaveToLibrary = pokeSaveChecked ? !!pokeSaveChecked.checked : true;
                 addMessage({
                     id: Date.now(), text: _formatPokeText(pokeText), timestamp: new Date(), type: 'system'
                 });
