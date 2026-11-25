@@ -405,8 +405,9 @@ const loadData = async () => {
         window._CONSTANTS = CONSTANTS;
 
         if (DOMElements && DOMElements.partner && DOMElements.me) {
-            updateAvatar(DOMElements.partner.avatar, partnerAvatarSrc);
-            updateAvatar(DOMElements.me.avatar, myAvatarSrc);
+            const _ov = window._avatarOverride || {};
+            updateAvatar(DOMElements.partner.avatar, _ov.partner || partnerAvatarSrc);
+            updateAvatar(DOMElements.me.avatar, _ov.me || myAvatarSrc);
         }
 
         if (savedChatBg) {
@@ -1824,6 +1825,8 @@ if (partnerPersonas && partnerPersonas.length > 0 && Math.random() < 0.3) {
                      if (nextPersona.avatar) {
                          updateAvatar(DOMElements.partner.avatar, nextPersona.avatar);
                          localforage.setItem(getStorageKey('partnerAvatar'), nextPersona.avatar);
+                         window._avatarOverride = window._avatarOverride || {};
+                         window._avatarOverride.partner = nextPersona.avatar;
                          try { if (typeof renderMessages === 'function') renderMessages(true); } catch (e) {}
                      }
                      throttledSaveData();
