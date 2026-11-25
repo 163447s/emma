@@ -479,7 +479,7 @@ function showPokeTab() {
     area.style.flexDirection = 'column';
     area.style.gap = '8px';
     
-    const quickPokes = customPokes.slice(0, 6);
+    const quickPokes = (customPokes || []).slice();
     
     quickPokes.forEach(pokeText => {
         const cleanPokeText = (typeof window._sanitizePokeTextForDisplay === 'function')
@@ -540,6 +540,9 @@ function showPokeTab() {
         letter-spacing: 0.3px;
         margin-top: 4px;
         box-shadow: 0 4px 14px rgba(var(--accent-color-rgb), 0.25);
+        position: sticky;
+        bottom: 0;
+        z-index: 3;
     `;
     customBtn.onclick = () => {
         document.getElementById('user-sticker-picker').classList.remove('active');
