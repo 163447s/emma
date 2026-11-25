@@ -22,6 +22,7 @@
     let qaPhotoBusy = false;
     let qaOptions = [{ type: 'text', text: '' }, { type: 'text', text: '' }];
     let qaPickIndex = -1;
+    let qaPickSlot = 0;
     let qaOptBusy = false;
 
     /* ── 小工具 ─────────────────────────────────────── */
@@ -55,11 +56,11 @@
                 // 存不下了：从最旧的几条开始把图丢掉，文字记录保留
                 let dropped = 0;
                 for (let i = list.length - 1; i >= 0 && dropped < 5; i--) {
-                    const hasPhoto = list[i] && (list[i].photo || (Array.isArray(list[i].options) && list[i].options.some(o => o && o.type === 'photo' && o.photo)));
+                    const hasPhoto = list[i] && (list[i].photo || (Array.isArray(list[i].options) && list[i].options.some(o => o && o.type === 'photo' && ((Array.isArray(o.photos) && o.photos.length) || o.photo))));
                     if (hasPhoto) {
                         const clone = Object.assign({}, list[i], { photo: null });
                         if (Array.isArray(list[i].options)) {
-                            clone.options = list[i].options.map(o => (o && o.type === 'photo') ? { type: 'photo', photo: null } : o);
+                            clone.options = list[i].options.map(o => (o && o.type === 'photo') ? { type: 'photo', photos: [] } : o);
                         }
                         list[i] = clone;
                         dropped++;
@@ -153,21 +154,29 @@
     /* ── 选项：每一项独立，可以是文字，也可以是一张图 ──────── */
     function optionTag(i) { return String.fromCharCode(65 + i); }
 
+    const OPTION_MAX_PHOTOS = 2;
+
     function normalizeOption(o) {
         if (o == null) return { type: 'text', text: '' };
         if (typeof o === 'string') return { type: 'text', text: o };
-        if (o.type === 'photo') return { type: 'photo', photo: o.photo || null };
+        if (o.type === 'photo') {
+            let photos = [];
+            if (Array.isArray(o.photos)) photos = o.photos.filter(Boolean);
+            else if (o.photo) photos = [o.photo];
+            return { type: 'photo', photos: photos.slice(0, OPTION_MAX_PHOTOS) };
+        }
         return { type: 'text', text: String(o.text == null ? '' : o.text) };
     }
 
     function optionIsValid(o) {
         const n = normalizeOption(o);
-        return n.type === 'photo' ? !!n.photo : String(n.text || '').trim().length > 0;
+        return n.type === 'photo' ? n.photos.length > 0 : String(n.text || '').trim().length > 0;
     }
 
     function optionLabel(o) {
         const n = normalizeOption(o);
-        return n.type === 'photo' ? '[图片]' : String(n.text || '').trim();
+        if (n.type === 'photo') return n.photos.length > 1 ? '[图片×' + n.photos.length + ']' : '[图片]';
+        return String(n.text || '').trim();
     }
 
     function isChosenOption(record, o, i) {
@@ -192,11 +201,22 @@
                 body = '<input type="text" class="qa-input qa-opt-text" data-text="' + i
                     + '" maxlength="60" autocomplete="off" placeholder="这一项写点什么？" value="' + esc(n.text) + '">';
             } else {
-                body = '<div class="qa-opt-photo">'
-                    + (n.photo ? '<img src="' + n.photo + '" data-big="' + i + '" alt="选项图">'
-                               : '<span class="qa-opt-photo-ph">还没选图</span>')
-                    + '<button type="button" class="qa-opt-photo-btn" data-pick="' + i + '">'
-                    + '<i class="fas fa-image"></i> ' + (n.photo ? '换一张' : '选一张图') + '</button>'
+                let slots = '';
+                for (let s = 0; s < OPTION_MAX_PHOTOS; s++) {
+                    const pic = n.photos[s];
+                    if (pic) {
+                        slots += '<span class="qa-opt-slot has">'
+                            + '<img src="' + pic + '" data-big="' + i + '" data-slot="' + s + '" alt="选项图 ' + (s + 1) + '">'
+                            + '<button type="button" class="qa-opt-slot-x" data-rm="' + i + '" data-slot="' + s + '" title="删掉这张"><i class="fas fa-times"></i></button>'
+                            + '</span>';
+                    } else if (s === n.photos.length) {
+                        slots += '<button type="button" class="qa-opt-slot add" data-pick="' + i + '" data-slot="' + s + '" title="'
+                            + (s === 0 ? '选一张图' : '再加一张') + '"><i class="fas fa-plus"></i>'
+                            + (s === 0 ? '' : '') + '</button>';
+                    }
+                }
+                body = '<div class="qa-opt-photo">' + slots
+                    + (n.photos.length ? '<span class="qa-opt-photo-cap">' + n.photos.length + '/' + OPTION_MAX_PHOTOS + '</span>' : '')
                     + '</div>';
             }
             const del = qaOptions.length > 2
@@ -234,12 +254,24 @@
         box.querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => {
             if (qaOptBusy) return;
             qaPickIndex = Number(el.dataset.pick);
+            qaPickSlot = Number(el.dataset.slot) || 0;
             const f = document.getElementById('qa-opt-file');
             if (f) f.click();
         }));
+
+        // 删掉其中一张
+        box.querySelectorAll('[data-rm]').forEach(el => el.addEventListener('click', () => {
+            const idx = Number(el.dataset.rm);
+            const slot = Number(el.dataset.slot) || 0;
+            const n = normalizeOption(qaOptions[idx]);
+            n.photos.splice(slot, 1);
+            qaOptions[idx] = { type: 'photo', photos: n.photos };
+            renderOptionsEditor();
+        }));
         box.querySelectorAll('[data-big]').forEach(el => el.addEventListener('click', () => {
             const n = normalizeOption(qaOptions[Number(el.dataset.big)]);
-            if (n.photo) window.open(n.photo, '_blank');
+            const pic = n.photos[Number(el.dataset.slot) || 0];
+            if (pic) window.open(pic, '_blank');
         }));
 
         // 删掉这一项
@@ -262,7 +294,11 @@
             qaOptBusy = true;
             try {
                 const dataUrl = await shrinkPhoto(file, 480, 60000);
-                qaOptions[qaPickIndex] = { type: 'photo', photo: dataUrl };
+                const cur = normalizeOption(qaOptions[qaPickIndex]);
+                const photos = cur.photos.slice(0, OPTION_MAX_PHOTOS);
+                const slot = Math.min(Math.max(qaPickSlot, 0), OPTION_MAX_PHOTOS - 1);
+                photos[slot] = dataUrl;
+                qaOptions[qaPickIndex] = { type: 'photo', photos: photos.filter(Boolean) };
                 renderOptionsEditor();
             } catch (err) {
                 console.warn('[QA] 选项图片处理失败:', err);
@@ -555,21 +591,31 @@
                 width: 100%;
             }
             #qa-modal .qa-opt-text:focus { border: none !important; }
-            #qa-modal .qa-opt-photo { display: flex; align-items: center; gap: 8px; width: 100%; }
-            #qa-modal .qa-opt-photo img {
-                width: 42px; height: 42px; object-fit: cover;
-                border-radius: 9px; border: 1px solid var(--border-color); cursor: zoom-in;
+            #qa-modal .qa-opt-photo { display: flex; align-items: center; gap: 7px; width: 100%; }
+            #qa-modal .qa-opt-slot {
+                position: relative; width: 42px; height: 42px;
+                border-radius: 9px; flex-shrink: 0;
             }
-            #qa-modal .qa-opt-photo-ph { font-size: 12px; color: var(--text-secondary); }
-            #qa-modal .qa-opt-photo-btn {
-                padding: 5px 11px; border-radius: 16px;
-                border: 1.5px solid var(--border-color);
+            #qa-modal .qa-opt-slot.has img {
+                width: 100%; height: 100%; object-fit: cover;
+                border-radius: 9px; border: 1px solid var(--border-color); cursor: zoom-in; display: block;
+            }
+            #qa-modal .qa-opt-slot-x {
+                position: absolute; top: -6px; right: -6px;
+                width: 17px; height: 17px; border-radius: 50%;
+                border: none; background: rgba(239, 68, 68, 0.9); color: #fff;
+                font-size: 10px; cursor: pointer; line-height: 1;
+                display: flex; align-items: center; justify-content: center;
+            }
+            #qa-modal .qa-opt-slot.add {
+                border: 1.5px dashed var(--border-color);
                 background: var(--secondary-bg);
                 color: var(--text-secondary);
-                font-size: 11.5px; cursor: pointer; font-family: var(--font-family);
-                white-space: nowrap;
+                font-size: 13px; cursor: pointer;
+                display: flex; align-items: center; justify-content: center;
             }
-            #qa-modal .qa-opt-photo-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            #qa-modal .qa-opt-slot.add:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            #qa-modal .qa-opt-photo-cap { font-size: 11px; color: var(--text-secondary); margin-left: 2px; }
             #qa-modal .qa-opt-type, #qa-modal .qa-opt-del {
                 width: 26px; height: 26px; flex-shrink: 0;
                 border: none; border-radius: 50%;
@@ -592,7 +638,8 @@
             }
             #qa-modal .qa-add-option:hover { border-color: var(--accent-color); color: var(--accent-color); }
             #qa-modal .qa-option-photo { padding: 6px; }
-            #qa-modal .qa-opt-img { max-width: 100%; max-height: 150px; border-radius: 10px; display: block; margin: 0 auto; cursor: zoom-in; }
+            #qa-modal .qa-opt-imgs { display: flex; gap: 6px; justify-content: center; align-items: center; }
+            #qa-modal .qa-opt-img { max-width: calc(50% - 3px); max-height: 150px; border-radius: 10px; display: block; cursor: zoom-in; }
             #qa-modal .qa-opt-void { font-size: 12px; color: var(--text-secondary); }
         `;
         (document.head || document.documentElement).appendChild(s);
@@ -710,7 +757,9 @@
             optsEl.innerHTML = opts.map((o, i) => {
                 const chosen = isChosenOption(record, o, i);
                 const inner = o.type === 'photo'
-                    ? (o.photo ? `<img class="qa-opt-img" src="${o.photo}" alt="">` : `<span class="qa-opt-void">图片已清理</span>`)
+                    ? (o.photos.length
+                        ? `<div class="qa-opt-imgs">${o.photos.map(p => `<img class="qa-opt-img" src="${p}" alt="">`).join('')}</div>`
+                        : `<span class="qa-opt-void">图片已清理</span>`)
                     : `<span>${esc(o.text)}</span>`;
                 return `<div class="qa-option${chosen ? ' chosen' : ''}${o.type === 'photo' ? ' qa-option-photo' : ''}" role="button" tabindex="0">
                     ${chosen ? '<span class="qa-opt-badge">✦ 他选了</span>' : ''}
