@@ -55,8 +55,13 @@
                 // 存不下了：从最旧的几条开始把图丢掉，文字记录保留
                 let dropped = 0;
                 for (let i = list.length - 1; i >= 0 && dropped < 5; i--) {
-                    if (list[i] && list[i].photo) {
-                        list[i] = Object.assign({}, list[i], { photo: null });
+                    const hasPhoto = list[i] && (list[i].photo || (Array.isArray(list[i].options) && list[i].options.some(o => o && o.type === 'photo' && o.photo)));
+                    if (hasPhoto) {
+                        const clone = Object.assign({}, list[i], { photo: null });
+                        if (Array.isArray(list[i].options)) {
+                            clone.options = list[i].options.map(o => (o && o.type === 'photo') ? { type: 'photo', photo: null } : o);
+                        }
+                        list[i] = clone;
                         dropped++;
                     }
                 }
