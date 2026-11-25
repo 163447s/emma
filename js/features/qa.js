@@ -20,6 +20,9 @@
     let qaCurrent = null; // 当前展示的记录 { question, options, chosen, card, time }
     let qaPendingPhoto = null; // 本次要随问题一起发出去的图（压缩后的 dataURL）
     let qaPhotoBusy = false;
+    let qaOptions = [{ type: 'text', text: '' }, { type: 'text', text: '' }];
+    let qaPickIndex = -1;
+    let qaOptBusy = false;
 
     /* ── 小工具 ─────────────────────────────────────── */
     function esc(s) {
@@ -139,6 +142,129 @@
                 img.src = fr.result;
             };
             fr.readAsDataURL(file);
+        });
+    }
+
+    /* ── 选项：每一项独立，可以是文字，也可以是一张图 ──────── */
+    function optionTag(i) { return String.fromCharCode(65 + i); }
+
+    function normalizeOption(o) {
+        if (o == null) return { type: 'text', text: '' };
+        if (typeof o === 'string') return { type: 'text', text: o };
+        if (o.type === 'photo') return { type: 'photo', photo: o.photo || null };
+        return { type: 'text', text: String(o.text == null ? '' : o.text) };
+    }
+
+    function optionIsValid(o) {
+        const n = normalizeOption(o);
+        return n.type === 'photo' ? !!n.photo : String(n.text || '').trim().length > 0;
+    }
+
+    function optionLabel(o) {
+        const n = normalizeOption(o);
+        return n.type === 'photo' ? '[图片]' : String(n.text || '').trim();
+    }
+
+    function isChosenOption(record, o, i) {
+        if (typeof record.chosenIndex === 'number') return i === record.chosenIndex;
+        const chosenText = String(record.chosen || '');
+        const n = normalizeOption(o);
+        return n.type === 'text' && n.text === chosenText;
+    }
+
+    function renderOptionsEditor() {
+        const box = document.getElementById('qa-options-editor');
+        if (!box) return;
+
+        box.innerHTML = qaOptions.map((o, i) => {
+            const n = normalizeOption(o);
+            const tag = '<span class="qa-opt-tag">' + optionTag(i) + '</span>';
+            const typeBtn = '<button type="button" class="qa-opt-type" data-type="' + i + '" title="'
+                + (n.type === 'text' ? '这一项改成发图片' : '这一项改回写字') + '">'
+                + '<i class="fas ' + (n.type === 'text' ? 'fa-image' : 'fa-font') + '"></i></button>';
+            let body;
+            if (n.type === 'text') {
+                body = '<input type="text" class="qa-input qa-opt-text" data-text="' + i
+                    + '" maxlength="60" autocomplete="off" placeholder="这一项写点什么？" value="' + esc(n.text) + '">';
+            } else {
+                body = '<div class="qa-opt-photo">'
+                    + (n.photo ? '<img src="' + n.photo + '" data-big="' + i + '" alt="选项图">'
+                               : '<span class="qa-opt-photo-ph">还没选图</span>')
+                    + '<button type="button" class="qa-opt-photo-btn" data-pick="' + i + '">'
+                    + '<i class="fas fa-image"></i> ' + (n.photo ? '换一张' : '选一张图') + '</button>'
+                    + '</div>';
+            }
+            const del = qaOptions.length > 2
+                ? '<button type="button" class="qa-opt-del" data-del="' + i + '" title="删掉这项"><i class="fas fa-times"></i></button>'
+                : '';
+            return '<div class="qa-opt-row' + (n.type === 'photo' ? ' is-photo' : '') + '">'
+                + tag + '<div class="qa-opt-body">' + body + '</div>' + typeBtn + del + '</div>';
+        }).join('') + '<input type="file" id="qa-opt-file" accept="image/*" hidden>';
+
+        // 文字项：边打边存，不重绘（免得丢焦点）
+        box.querySelectorAll('[data-text]').forEach(el => {
+            const idx = Number(el.dataset.text);
+            el.addEventListener('input', () => { qaOptions[idx] = { type: 'text', text: el.value }; });
+            el.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const next = box.querySelector('[data-text="' + (idx + 1) + '"]');
+                if (next) next.focus(); else handleSubmit();
+            });
+        });
+
+        // 切换类型：文字 ↔ 图片
+        box.querySelectorAll('[data-type]').forEach(el => el.addEventListener('click', () => {
+            const idx = Number(el.dataset.type);
+            const n = normalizeOption(qaOptions[idx]);
+            if (n.type === 'text') {
+                qaOptions[idx] = { type: 'photo', photo: null };
+            } else {
+                qaOptions[idx] = { type: 'text', text: '' };
+            }
+            renderOptionsEditor();
+        }));
+
+        // 选图 / 点开看大图
+        box.querySelectorAll('[data-pick]').forEach(el => el.addEventListener('click', () => {
+            if (qaOptBusy) return;
+            qaPickIndex = Number(el.dataset.pick);
+            const f = document.getElementById('qa-opt-file');
+            if (f) f.click();
+        }));
+        box.querySelectorAll('[data-big]').forEach(el => el.addEventListener('click', () => {
+            const n = normalizeOption(qaOptions[Number(el.dataset.big)]);
+            if (n.photo) window.open(n.photo, '_blank');
+        }));
+
+        // 删掉这一项
+        box.querySelectorAll('[data-del]').forEach(el => el.addEventListener('click', () => {
+            if (qaOptions.length <= 2) return;
+            qaOptions.splice(Number(el.dataset.del), 1);
+            renderOptionsEditor();
+        }));
+
+        // 选图回调（元素每次重建，绑在新建的 input 上）
+        const fileEl = document.getElementById('qa-opt-file');
+        if (fileEl) fileEl.addEventListener('change', async (e) => {
+            const file = e.target.files && e.target.files[0];
+            e.target.value = '';
+            if (!file) return;
+            if (!/^image\//.test(file.type || '')) {
+                if (typeof showNotification === 'function') showNotification('只支持图片文件', 'warning');
+                return;
+            }
+            qaOptBusy = true;
+            try {
+                const dataUrl = await shrinkPhoto(file, 480, 60000);
+                qaOptions[qaPickIndex] = { type: 'photo', photo: dataUrl };
+                renderOptionsEditor();
+            } catch (err) {
+                console.warn('[QA] 选项图片处理失败:', err);
+                if (typeof showNotification === 'function') showNotification('这张图没处理成功，换一张试试', 'error');
+            } finally {
+                qaOptBusy = false;
+            }
         });
     }
 
@@ -400,6 +526,69 @@
                 border-radius: 8px; border: 1px solid var(--border-color);
                 vertical-align: middle; margin-right: 8px;
             }
+            #qa-modal .qa-opt-editor { display: flex; flex-direction: column; gap: 9px; }
+            #qa-modal .qa-opt-row {
+                display: flex; align-items: center; gap: 8px;
+                padding: 7px 9px;
+                border: 1.5px solid var(--border-color);
+                border-radius: 13px;
+                background: var(--primary-bg);
+            }
+            #qa-modal .qa-opt-row.is-photo { border-style: dashed; }
+            #qa-modal .qa-opt-tag {
+                width: 22px; height: 22px; flex-shrink: 0;
+                display: flex; align-items: center; justify-content: center;
+                border-radius: 50%;
+                background: rgba(var(--accent-color-rgb), 0.12);
+                color: var(--accent-color);
+                font-size: 12px; font-weight: 700;
+            }
+            #qa-modal .qa-opt-body { flex: 1; min-width: 0; display: flex; align-items: center; }
+            #qa-modal .qa-opt-text {
+                border: none !important; background: transparent !important;
+                padding: 4px 2px !important; font-size: 13.5px !important;
+                width: 100%;
+            }
+            #qa-modal .qa-opt-text:focus { border: none !important; }
+            #qa-modal .qa-opt-photo { display: flex; align-items: center; gap: 8px; width: 100%; }
+            #qa-modal .qa-opt-photo img {
+                width: 42px; height: 42px; object-fit: cover;
+                border-radius: 9px; border: 1px solid var(--border-color); cursor: zoom-in;
+            }
+            #qa-modal .qa-opt-photo-ph { font-size: 12px; color: var(--text-secondary); }
+            #qa-modal .qa-opt-photo-btn {
+                padding: 5px 11px; border-radius: 16px;
+                border: 1.5px solid var(--border-color);
+                background: var(--secondary-bg);
+                color: var(--text-secondary);
+                font-size: 11.5px; cursor: pointer; font-family: var(--font-family);
+                white-space: nowrap;
+            }
+            #qa-modal .qa-opt-photo-btn:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            #qa-modal .qa-opt-type, #qa-modal .qa-opt-del {
+                width: 26px; height: 26px; flex-shrink: 0;
+                border: none; border-radius: 50%;
+                background: transparent;
+                color: var(--text-secondary);
+                font-size: 12px; cursor: pointer;
+                display: flex; align-items: center; justify-content: center;
+            }
+            #qa-modal .qa-opt-type:hover { background: rgba(var(--accent-color-rgb), 0.12); color: var(--accent-color); }
+            #qa-modal .qa-opt-del:hover { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+            #qa-modal .qa-add-option {
+                margin-top: 9px;
+                display: inline-flex; align-items: center; gap: 5px;
+                padding: 7px 13px;
+                border: 1.5px dashed var(--border-color);
+                border-radius: 18px;
+                background: transparent;
+                color: var(--text-secondary);
+                font-size: 12px; cursor: pointer; font-family: var(--font-family);
+            }
+            #qa-modal .qa-add-option:hover { border-color: var(--accent-color); color: var(--accent-color); }
+            #qa-modal .qa-option-photo { padding: 6px; }
+            #qa-modal .qa-opt-img { max-width: 100%; max-height: 150px; border-radius: 10px; display: block; margin: 0 auto; cursor: zoom-in; }
+            #qa-modal .qa-opt-void { font-size: 12px; color: var(--text-secondary); }
         `;
         (document.head || document.documentElement).appendChild(s);
     })();
@@ -435,7 +624,8 @@
                         <input type="file" id="qa-photo-input" accept="image/*" hidden>
                     </div>
                     <div class="qa-field-label"><i class="fas fa-list-ul"></i> 选项</div>
-                    <textarea id="qa-options-input" class="qa-input qa-textarea" placeholder="每行一个选项，至少2个" rows="4"></textarea>
+                    <div id="qa-options-editor" class="qa-opt-editor"></div>
+                    <button type="button" id="qa-add-option" class="qa-add-option"><i class="fas fa-plus"></i> 再加一项</button>
                     <div class="qa-hint">✧ 他会从你给出的选项里随机替你选一个，并回你一张字卡</div>
                     <div class="modal-buttons qa-btn-row">
                         <button class="modal-btn modal-btn-secondary" id="qa-cancel-btn">关闭</button>
@@ -511,11 +701,15 @@
         }
 
         if (optsEl) {
-            optsEl.innerHTML = record.options.map((opt) => {
-                const chosen = opt === record.chosen;
-                return `<div class="qa-option${chosen ? ' chosen' : ''}" role="button" tabindex="0">
+            const opts = (record.options || []).map(normalizeOption);
+            optsEl.innerHTML = opts.map((o, i) => {
+                const chosen = isChosenOption(record, o, i);
+                const inner = o.type === 'photo'
+                    ? (o.photo ? `<img class="qa-opt-img" src="${o.photo}" alt="">` : `<span class="qa-opt-void">图片已清理</span>`)
+                    : `<span>${esc(o.text)}</span>`;
+                return `<div class="qa-option${chosen ? ' chosen' : ''}${o.type === 'photo' ? ' qa-option-photo' : ''}" role="button" tabindex="0">
                     ${chosen ? '<span class="qa-opt-badge">✦ 他选了</span>' : ''}
-                    <span>${esc(opt)}</span>
+                    ${inner}
                 </div>`;
             }).join('');
 
@@ -533,6 +727,9 @@
                     badge.textContent = '你选了';
                     el.insertBefore(badge, el.firstChild);
                 });
+            });
+            optsEl.querySelectorAll('.qa-opt-img').forEach(img => {
+                img.addEventListener('click', (e) => { e.stopPropagation(); window.open(img.src, '_blank'); });
             });
         }
 
@@ -589,24 +786,36 @@
     /* ── 核心逻辑 ─────────────────────────────────────── */
     function handleSubmit() {
         const q = document.getElementById('qa-question-input');
-        const ta = document.getElementById('qa-options-input');
         const question = (q.value || '').trim();
-        const options = (ta.value || '').split(/\n+/).map(s => s.trim()).filter(Boolean);
 
         if (!question) {
             if (typeof showNotification === 'function') showNotification('先写下你想问他的问题吧 ✧', 'warning');
-            q.focus();
+            if (q) q.focus();
             return;
         }
-        if (options.length < 2) {
-            if (typeof showNotification === 'function') showNotification('至少提供 2 个选项，每行一个', 'warning');
-            ta.focus();
+        if (qaOptions.length < 2) {
+            if (typeof showNotification === 'function') showNotification('至少要两项可选', 'warning');
+            return;
+        }
+        const bad = qaOptions.findIndex(o => !optionIsValid(o));
+        if (bad !== -1) {
+            const n = normalizeOption(qaOptions[bad]);
+            if (typeof showNotification === 'function') {
+                showNotification('第 ' + optionTag(bad) + ' 项' + (n.type === 'photo' ? '还没选图' : '还没写字'), 'warning');
+            }
+            const el = document.querySelector('[data-text="' + bad + '"], [data-pick="' + bad + '"]');
+            if (el) el.focus();
             return;
         }
 
-        const chosen = options[Math.floor(Math.random() * options.length)];
+        const opts = qaOptions.map(normalizeOption);
+        const chosenIndex = Math.floor(Math.random() * opts.length);
+        const chosen = optionLabel(opts[chosenIndex]);
         const card = drawRandomCard();
-        const record = { question, options, chosen, card, photo: qaPendingPhoto || null, time: Date.now() };
+        const record = {
+            question, options: opts, chosenIndex, chosen, card,
+            photo: qaPendingPhoto || null, time: Date.now()
+        };
         qaCurrent = record;
         addHistoryRecord(record);
         renderResult(record);
@@ -615,12 +824,14 @@
 
     function handleAgain() {
         if (!qaCurrent || !Array.isArray(qaCurrent.options) || qaCurrent.options.length < 2) return;
-        const chosen = qaCurrent.options[Math.floor(Math.random() * qaCurrent.options.length)];
+        const opts = qaCurrent.options.map(normalizeOption);
+        const chosenIndex = Math.floor(Math.random() * opts.length);
         const card = drawRandomCard();
         const record = {
             question: qaCurrent.question,
-            options: qaCurrent.options.slice(),
-            chosen,
+            options: opts,
+            chosenIndex,
+            chosen: optionLabel(opts[chosenIndex]),
             card,
             photo: qaCurrent.photo || null,
             time: Date.now()
@@ -633,9 +844,9 @@
     function openQA() {
         buildModal();
         const q = document.getElementById('qa-question-input');
-        const ta = document.getElementById('qa-options-input');
         if (q) q.value = '';
-        if (ta) ta.value = '';
+        qaOptions = [{ type: 'text', text: '' }, { type: 'text', text: '' }];
+        renderOptionsEditor();
         qaPendingPhoto = null;
         const pv = document.getElementById('qa-photo-preview');
         if (pv) pv.style.display = 'none';
@@ -727,9 +938,15 @@
 
         const backBtn = document.getElementById('qa-back-btn');
         if (backBtn) backBtn.addEventListener('click', () => {
-            const q = document.getElementById('qa-question-input');
+            if (qaCurrent && Array.isArray(qaCurrent.options)) {
+                qaOptions = qaCurrent.options.map(normalizeOption);
+                renderOptionsEditor();
+                qaPendingPhoto = qaCurrent.photo || null;
+                const pi = document.getElementById('qa-photo-img');
+                const pv = document.getElementById('qa-photo-preview');
+                if (qaPendingPhoto && pi) { pi.src = qaPendingPhoto; if (pv) pv.style.display = 'block'; }
+            }
             showView('setup');
-            setTimeout(() => { if (q) q.focus(); }, 60);
         });
 
         const historyBtn = document.getElementById('qa-history-btn');
@@ -749,13 +966,17 @@
             if (typeof showNotification === 'function') showNotification('问答记录已清空', 'success');
         });
 
-        // 出题视图：Ctrl/Cmd + Enter 快速提交
-        const ta = document.getElementById('qa-options-input');
-        if (ta) ta.addEventListener('keydown', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                e.preventDefault();
-                handleSubmit();
+        // 再加一项
+        const addOptBtn = document.getElementById('qa-add-option');
+        if (addOptBtn) addOptBtn.addEventListener('click', () => {
+            if (qaOptions.length >= 8) {
+                if (typeof showNotification === 'function') showNotification('最多 8 项够用啦', 'warning');
+                return;
             }
+            qaOptions.push({ type: 'text', text: '' });
+            renderOptionsEditor();
+            const last = document.querySelector('[data-text="' + (qaOptions.length - 1) + '"]');
+            if (last) last.focus();
         });
     }
 
